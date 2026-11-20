@@ -1,0 +1,20 @@
+# OpenTofu state, variables and plans never enter Git
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+*.tfplan
+tfplan
+*.plan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# .terraform.lock.hcl is committed on purpose (do not ignore it)
+
+# local toolchain and working notes
+/.tools/
+/.superpowers/

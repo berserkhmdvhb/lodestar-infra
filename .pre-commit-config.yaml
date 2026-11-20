@@ -1,0 +1,33 @@
+# Local hooks only: pre-commit never downloads a hook repo. The tools come from `make tools`
+# (tools/pins.tsv is the one source of pins), so hooks call the Makefile or ./.tools/bin.
+repos:
+  - repo: local
+    hooks:
+      - id: tofu-fmt
+        name: tofu fmt
+        entry: make fmt
+        language: system
+        files: \.(tf|tfvars|tftest\.hcl)$
+        pass_filenames: false
+      - id: tofu-validate
+        name: tofu validate
+        entry: make validate
+        language: system
+        files: \.(tf|tfvars|hcl)$
+        pass_filenames: false
+      - id: tflint-checkov
+        name: tflint and checkov
+        entry: make lint
+        language: system
+        files: \.(tf|hcl)$
+        pass_filenames: false
+      - id: shellcheck
+        name: shellcheck
+        entry: ./.tools/bin/shellcheck
+        language: system
+        files: ^scripts/.*\.sh$
+      - id: gitleaks
+        name: gitleaks
+        entry: ./.tools/bin/gitleaks git --pre-commit --staged --redact --no-banner
+        language: system
+        pass_filenames: false
