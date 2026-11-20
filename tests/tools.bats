@@ -127,3 +127,63 @@ PY
     fi
   done < "$ROOT/tools/pins.tsv"
 }
+
+# scripts/safe_extract.py zip path, driven directly. mkzip <name> <mode-or--> <zip>
+mkzip() {
+  python3 -I - "$1" "$2" "$3" <<'PY'
+import sys, zipfile
+name, mode, out = sys.argv[1:]
+with zipfile.ZipFile(out, "w") as zf:
+    i = zipfile.ZipInfo(name)
+    if mode != "-":
+        i.external_attr = int(mode, 8) << 16
+    zf.writestr(i, "x")
+PY
+}
+
+@test "zip: a .. member is refused and writes nothing outside dest" {
+  mkzip "../evil" 100644 "$D/a.zip"
+  mkdir "$D/dest"
+  run python3 -I "$ROOT/scripts/safe_extract.py" "$D/a.zip" "$D/dest"
+  [ "$status" -ne 0 ]
+  [ ! -e "$D/evil" ]
+  [ -z "$(ls -A "$D/dest")" ]
+}
+
+@test "zip: an absolute-path member is refused and writes nothing there" {
+  mkzip "$D/abs/evil" 100644 "$D/a.zip"
+  mkdir "$D/dest"
+  run python3 -I "$ROOT/scripts/safe_extract.py" "$D/a.zip" "$D/dest"
+  [ "$status" -ne 0 ]
+  [ ! -e "$D/abs" ]
+  [ -z "$(ls -A "$D/dest")" ]
+}
+
+@test "zip: FIFO and character-device members are refused" {
+  mkdir "$D/dest"
+  for mode in 010644 020644; do
+    mkzip "special" "$mode" "$D/a.zip"
+    run python3 -I "$ROOT/scripts/safe_extract.py" "$D/a.zip" "$D/dest"
+    [ "$status" -ne 0 ]
+    [ -z "$(ls -A "$D/dest")" ]
+  done
+}
+
+@test "zip: a good zip extracts and no setuid or setgid bit survives" {
+  python3 -I - "$D/good.zip" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "w") as zf:
+    d = zipfile.ZipInfo("sub/")
+    d.external_attr = (0o40755 << 16) | 0x10
+    zf.writestr(d, "")
+    f = zipfile.ZipInfo("sub/tool")
+    f.external_attr = 0o104755 << 16
+    zf.writestr(f, "payload")
+PY
+  mkdir "$D/dest"
+  run python3 -I "$ROOT/scripts/safe_extract.py" "$D/good.zip" "$D/dest"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$D/dest/sub/tool")" = payload ]
+  [ ! -u "$D/dest/sub/tool" ]
+  [ ! -g "$D/dest/sub/tool" ]
+}
