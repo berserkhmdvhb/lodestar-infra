@@ -37,14 +37,23 @@
 
 | Phase | Theme | Tasks | Status |
 |---|---|---|---|
-| 0 | Scaffold | L0.1 | not started |
+| 0 | Scaffold | L0.1 | **done** (2026-11-20) |
 | 1 | State and Google Cloud | L1.1 to L1.4 | not started |
 | 2 | Cloudflare | L2.1 to L2.3 | not started |
 | 3 | Environments, CI and docs | L3.1 to L3.3 | not started |
 
 ### Task L0.1: Scaffold
 **Files:** `README.md` (purpose, layout, the apply workflow, links to the guides), `LICENSE` (Apache-2.0), `.gitignore`, `.pre-commit-config.yaml` (tofu fmt and validate, tflint, checkov, gitleaks), `tools/pins.tsv` and `scripts/tools.sh` (checksum-verified install into `.tools/bin` of tofu, tflint and checkov through `uv tool`), and a `Makefile` (`tools fmt validate lint test check`).
-- [ ] **Verify:** `make tools check` passes on an empty tree.
+- [x] **Verify:** `make tools check` passes on an empty tree.
+
+**Executed (2026-11-20, commits d5bf9e4 and 5494166):**
+- **What exists:** `README.md`, `LICENSE` (Apache-2.0, byte-identical to GitHub's text), `.gitignore`, `.pre-commit-config.yaml` (local hooks only, so pre-commit never downloads), `.tflint.hcl`, `tools/pins.tsv`, `tools/requirements/`, `scripts/tools.sh`, `scripts/safe_extract.py`, `tests/tools.bats` and a `Makefile`.
+- **The installer** is ported from the fullstack template: each download is checked against its sha256 before it's unpacked, tar archives go through `filter="data"`, and the Python tools are hash-pinned.
+- **A zip branch was added,** because tflint ships zips. It refuses `..` names, absolute names, symlinks and special files, and a setuid bit never survives.
+- **Pins:** tofu 1.13.9, tflint 0.66.0, the google ruleset 0.41.0 (installed from a verified archive, so `tflint --init` fetches nothing), gitleaks 8.30.1, shellcheck 0.11.0, bats 1.14.0, checkov 3.4.5 and pre-commit 4.7.0.
+- **Results:** `make check` on the empty tree exits 0, with a "no OpenTofu roots yet" line from each target. bats: 14/14.
+- **Review:** one Important issue, the zip branch had a single test; it was fixed in round 1 with four more cases. The controller also fixed one trailing newline in the LICENSE. Re-reviewed clean.
+- **Carried to L1.1:** the docstring wording, a comment on mode-less zip members, a note that the bats hash isn't vendor-attested, checkov `--skip-path .tools`, and a first `pre-commit run --all-files`.
 
 ### Task L1.1: The state bootstrap
 **Files:** `bootstrap/` (a GCS bucket with versioning, uniform bucket-level access, public access prevention, an optional CMEK key, and a retention lock on noncurrent versions), plus `bootstrap/README.md` (a one-time apply with local state, then migrate).
