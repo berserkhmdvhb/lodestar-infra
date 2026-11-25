@@ -118,3 +118,13 @@ The registrar stays manual.
 - **The mapping:** each guide step mapped to its resource.
 
 Also cover drift detection, which runs as `tofu plan` on a schedule once credentials exist; that's for later.
+
+## Carried from the setup-guide fixes (2026-11-25)
+
+The guides were corrected before the owner's by-hand setup. Their settings are this plan's source, so these land in the modules:
+- **L1.3, the maintenance window:** 00:00 to 08:00 UTC on Saturday and Sunday. GKE needs at least 48 hours of maintenance time in any 32 days, counted in blocks of 4 hours or more; the old 4-hour window is refused. Add a test that the window meets the rule.
+- **L1.2, `gcp-github-wif`:** a second provider for pull request previews (`github-oidc-preview`, condition on `assertion.environment=='preview'` and `preview.yml` on a pull request merge ref or `main`), and a `preview` deployer. The deployers' cluster role is `roles/container.clusterViewer` if it still holds `container.clusters.connect`, otherwise a custom role with exactly `container.clusters.get` and `container.clusters.connect`.
+- **L1.2, `gcp-network`:** an optional proxy-only subnet (`10.129.0.0/23`, `REGIONAL_MANAGED_PROXY`) for the previews' internal Gateway.
+- **L2.1, the zone:** the encryption mode set explicitly (Custom, Full (strict)); new zones start in Automatic SSL/TLS.
+- **L2.2, tunnel and Access:** the optional wildcard preview route (last in the route list), its wildcard Access application with an `owner` Allow policy and a `preview-smoke` Service Auth policy, and the service token.
+- **A new platform add-ons task** (already noted): the in-cluster connector now also has a NetworkPolicy (no ingress; egress to kube-dns, 7844 TCP and UDP and 443 outside private ranges, and the `tier` app namespaces), and the Kyverno install.
