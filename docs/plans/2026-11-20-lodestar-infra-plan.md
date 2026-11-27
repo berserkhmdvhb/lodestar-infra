@@ -50,7 +50,7 @@
 **Files:** `README.md` (purpose, layout, the apply workflow, links to the guides), `LICENSE` (Apache-2.0), `.gitignore`, `.pre-commit-config.yaml` (tofu fmt and validate, tflint, checkov, gitleaks), `tools/pins.tsv` and `scripts/tools.sh` (checksum-verified install into `.tools/bin` of tofu, tflint and checkov through `uv tool`), and a `Makefile` (`tools fmt validate lint test check`).
 - [x] **Verify:** `make tools check` passes on an empty tree.
 
-**Executed (2026-11-20, commits d5bf9e4 and 5494166):**
+**Executed (2026-11-20, commits e767ba5 and e68f124):**
 - **What exists:** `README.md`, `LICENSE` (Apache-2.0, byte-identical to GitHub's text), `.gitignore`, `.pre-commit-config.yaml` (local hooks only, so pre-commit never downloads), `.tflint.hcl`, `tools/pins.tsv`, `tools/requirements/`, `scripts/tools.sh`, `scripts/safe_extract.py`, `tests/tools.bats` and a `Makefile`.
 - **The installer** is ported from the fullstack template: each download is checked against its sha256 before it's unpacked, tar archives go through `filter="data"`, and the Python tools are hash-pinned.
 - **A zip branch was added,** because tflint ships zips. It refuses `..` names, absolute names, symlinks and special files, and a setuid bit never survives.
@@ -63,7 +63,7 @@
 **Files:** `bootstrap/` (a GCS bucket with versioning, uniform bucket-level access, public access prevention, an optional CMEK key, and a retention lock on noncurrent versions), plus `bootstrap/README.md` (a one-time apply with local state, then migrate).
 - [x] **Tests:** the bucket is versioned, has uniform access and prevents public access.
 
-**Executed (2026-11-27, commits 0092ab2, dd2b3ea and bb13540):**
+**Executed (2026-11-27, commits 9c28345, 9363eb0 and 4da8033):**
 - **What exists:** `bootstrap/`, with:
   - the `cloudkms` and `storage` APIs;
   - a KMS key ring and key (rotation a variable, 90 days by default; `prevent_destroy`);
@@ -87,7 +87,7 @@
 
 **Executed (2026-11-27). Three reviewed dispatches, each clean on the first review; the controller's `make check` exits 0:**
 
-**L1.2a, `dfb063f`.** Each value matches the owner's live resources, and the optionals the owner never set stay unset:
+**L1.2a, `957860a`.** Each value matches the owner's live resources, and the optionals the owner never set stay unset:
 - **`gcp-project`:** the nine APIs, `disable_on_destroy = false`.
 - **`gcp-network`:**
   - `apps-vpc`;
@@ -98,7 +98,7 @@
 - **`gcp-node-sa`:** `gke-nodes` with `roles/container.defaultNodeServiceAccount`, or the four classic roles.
 - **`gcp-registry`:** off by default, since the template uses GHCR.
 
-**L1.2b, `581bc5a` (`gcp-github-wif`):**
+**L1.2b, `b3fae3b` (`gcp-github-wif`):**
 - the pool and the `github-oidc` provider;
 - the exact stored condition (owner ID, repo ID, `deploy|deploy-ops` on `main` or `v*`, with doubled backslashes);
 - `gh-deployer-<env>`, bound to `<sub_claim_prefix>:environment:<env>`, so it works with immutable subjects;
@@ -106,7 +106,7 @@
 - no registry writer;
 - optional previews and drift per guide §12.5 and §12.6.
 
-**L1.2c, `8bb7f0e`:**
+**L1.2c, `0f4f633`:**
 - **`gcp-secrets`:** five conditional secretAccessor bindings (`eso-<ns>`), plus the seven empty secrets with user-managed replication in the region. A Makefile grep fails the build if a `google_secret_manager_secret_version` ever appears.
 - **`gcp-budget`:** optional; project filter, EUR amount, thresholds 0.5/0.9/1.0/1.5.
 
@@ -130,7 +130,7 @@
 - labels.
 - [x] **Tests:** every setting in the list above; the node service account isn't the default compute account.
 
-**Executed (2026-11-27, commit db877a8):** `modules/gcp-gke`, import-shaped against the owner's live cluster. The values were written from the owner's private, read-only exports, and no identifying value is in Git.
+**Executed (2026-11-27, commit 543e183):** `modules/gcp-gke`, import-shaped against the owner's live cluster. The values were written from the owner's private, read-only exports, and no identifying value is in Git.
 - **Cluster:**
   - a zonal `apps`, built without an inline pool;
   - it ignores `node_pool`, `node_config`, `initial_node_count` and `remove_default_node_pool`;
@@ -183,11 +183,11 @@ This pulls the Google half of L3.1 forward, because the import needs a root. `en
 
 **Owner-run acceptance (2026-11-27): PASSED.**
 1. **Bootstrap.** The bucket, key ring, key and two APIs (5 added). The state moved into the bucket, proven encrypted (`encrypted_data` present, no plain resources). The final override is enforced, and the local state was removed.
-2. **First import plan: failed.** The provider bills requests to the project, and the Service Usage API was off there, so the 9 API reads failed (403). The fix (commit 29eeb75, reviewed) has the bootstrap enable `serviceusage.googleapis.com`: 1 added.
+2. **First import plan: failed.** The provider bills requests to the project, and the Service Usage API was off there, so the 9 API reads failed (403). The fix (commit 76ecf0c, reviewed) has the bootstrap enable `serviceusage.googleapis.com`: 1 added.
 3. **Import plan: `41 to import, 0 to add, 1 to change, 0 to destroy`.** The only change was the cluster's state-only `cluster = "apps"` labels. The APIs showed no change.
 4. **After the import apply,** `tofu plan` reports **No changes. Your infrastructure matches the configuration.**
 
-**Executed (2026-11-27, commits 633cd07 and 308b4f8, plus the phase-1 fix wave):**
+**Executed (2026-11-27, commits 7dc7a6e and b3d996e, plus the phase-1 fix wave):**
 - **Module fixes from the owner's live exports:** the NAT's `enable_endpoint_independent_mapping = false`; the budget's `calendar_period = "MONTH"` and `credit_types_treatment = "INCLUDE_ALL_CREDITS"`.
 - **The `envs/apps` root:**
   - Pins: tofu 1.13.9 and google 8.12.0.
