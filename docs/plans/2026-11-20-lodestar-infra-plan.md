@@ -224,7 +224,23 @@ The repository is public and manages live infrastructure, so CI moves from the l
 - [ ] **`ci.yml`:** the same gates as `make check`, with the same pinned tools installed by `make tools` (local and CI parity). That is fmt-check, validate with `-backend=false`, tflint, checkov, `tofu test`, bats, shellcheck and gitleaks, plus actionlint and zizmor. One aggregated required check, `CI OK`. Every action is SHA-pinned; there are timeouts, `concurrency`, read-only `permissions`, and `persist-credentials: false`.
 - [ ] **PR title check** (Conventional Commits), **Dependabot** (GitHub Actions, plus the OpenTofu/Terraform providers for each root and module), and **OpenSSF Scorecard**. The template's patterns are reused, adapted to this repository.
 - [ ] **`scripts/github-settings.sh`:** dry-run by default, `--apply` explicit. It sets a `main` ruleset (PRs only, `CI OK` and the PR-title check required, squash only, no force-push or deletion), security settings, and Dependabot alerts. The owner runs it once with their own `gh` login.
-- [ ] **Tests:** bats for the settings script's dry run, and actionlint and zizmor clean. Before it is called green, CI parity is checked in a runner-like fresh clone with only CI's tools.
+- [x] **Tests:** bats for the settings script's dry run, and actionlint and zizmor clean. Before it is called green, CI parity is checked in a runner-like fresh clone with only CI's tools.
+
+**Executed (2026-11-27, commits 3cf8bae, 0ca2c44, eb92707, a09cff2 and 42da6b4; built in an isolated worktree and rebased onto main):**
+- **`ci.yml`:** runs the exact `make check` targets, with the tools from `make tools`. `make check` now includes `make actions` (actionlint plus a hash-locked zizmor).
+  - The single required check is `CI OK`, with `if: always()`; any non-success fails it.
+  - Top-level `permissions: {}`, `persist-credentials: false`, timeouts and concurrency.
+- **PR title:** `PR title (Conventional Commits)`, with the title read from `env` and job `permissions: {}`.
+- **Scorecard:** with SARIF upload.
+- **Dependabot:** github-actions, plus the `opentofu` ecosystem (per dependabot-core; a manual-bump fallback is documented). The PR template and the zizmor config come from the template patterns. No CODEOWNERS (ruling).
+- **`scripts/github-settings.sh`:**
+  - Dry run by default. It does a read-only GET to say whether it would create or update.
+  - The `main` ruleset: PRs required with 0 approvals; strict `CI OK` and PR-title checks (GitHub Actions app); squash only; no force-push or deletion; no bypass.
+  - Squash commits take the PR title and body.
+  - It also turns on secret scanning, push protection, Dependabot alerts and security fixes, and private vulnerability reporting.
+- **Parity proof:** a fresh worktree with no tfvars gives `make check` rc 0.
+- **Review:** one Important finding (the squash title) and four small items, fixed in one round; the re-review is clean. Action pins are reused from the template; `setup-uv` was verified against its tag.
+- **Owner steps:** push; a green first run; then `bash scripts/github-settings.sh` (dry run) and `--apply`.
 
 ### Task L1.7: PR plans and weekly drift, with a read-only keyless identity (added 2026-11-27, owner go)
 **Files:** `modules/gcp-ci-planner` (or an extension of `gcp-github-wif`), the `envs/apps` wiring, `.github/workflows/plan.yml`, `.github/workflows/drift.yml`, and docs.
