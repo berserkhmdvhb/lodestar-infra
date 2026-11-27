@@ -2,8 +2,8 @@
 
 The state bootstrap of the PRODUCTION project: the same `modules/gcp-state-backend` as [`../`](../README.md), in its
 own project, with its own bucket and its own KMS key, so production state never depends on the non-production
-project. It also enables the Cloud KMS, Cloud Storage and Service Usage APIs there (3 `google_project_service`
-resources; the production env root bills requests to the project).
+project. It also enables the Cloud KMS, Cloud Storage, Service Usage and Cloud Resource Manager APIs there
+(4 `google_project_service` resources; the production env root bills requests to the project).
 
 What the bucket and key are (versioned, uniform access, public access prevention enforced, no retention policy, the
 key ring, key and bucket have `prevent_destroy`, `state_admins` get `roles/storage.objectAdmin` plus the key role) is
