@@ -12,6 +12,7 @@
 # only a whole registered value, so a line is never cut; the redaction is a second layer.
 # The workflow sets REDACT_WIF_PROVIDER and REDACT_SA from the CI identity secrets.
 # The plan file and the log live in a temporary directory that is removed on exit and never uploaded.
+# The summary is redacted the same way (addresses can carry values as keys, and issue bodies are not masked).
 # Writes `exitcode=0` (no changes) or `exitcode=2` (changes) to $GITHUB_OUTPUT.
 # Structured inputs: CI_MASK_JSON names environment variables (space-separated) that hold JSON, such as
 # TF_VAR_services. Before any tofu command, every string and number leaf in them, and the owner and the repo of every
@@ -31,7 +32,8 @@ mask_json() {
   for name in ${CI_MASK_JSON:-}; do
     out="$(printenv "$name" | jq -r '
       [.. | scalars | select(type == "string" or type == "number") | tostring | split("\n")[] | select(length > 0)] as $l
-      | ($l + [$l[] | select(test("^[^/]+/[^/]+$")) | split("/")[]]) | unique | .[]' 2>/dev/null)" ||
+      | ($l + [$l[] | select(test("^[^/]+/[^/]+$")) | split("/")[]]) as $m
+      | ($m + [$m[] | select(contains(".")) | (gsub("\\."; "\\."), gsub("\\."; "\\\\."))]) | unique | .[]' 2>/dev/null)" ||
       { echo "::error::${name} is not valid JSON"; exit 1; }
     while IFS= read -r leaf; do
       [[ -n "$leaf" ]] || continue
@@ -82,6 +84,6 @@ jq -r '
   "Plan: \(n(. == ["create"])) to add, \(n(. == ["update"])) to change, \(n(. == ["delete"])) to destroy, \(n(. == ["delete", "create"] or . == ["create", "delete"])) to replace.",
   "",
   (if ($c | length) == 0 then "No changes." else $c[] | "- `\(.address)`: \(.change.actions | join(", "))" end)
-' "$work/plan.json" >"$summary"
+' "$work/plan.json" | redact >"$summary"
 
 echo "exitcode=$code" >>"${GITHUB_OUTPUT:-/dev/null}"

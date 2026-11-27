@@ -86,3 +86,22 @@ refs() { grep -oE '(secrets|vars)\.[A-Za-z0-9_]+' <<<"$1" | sort -u; }
     grep -q -- '--author app/github-actions' <<<"$(job drift.yml "${spec%%:*}")"
   done
 }
+
+@test "drift-prod has no path filter, and the plan jobs fetch two commits and fail on a git error" {
+  run ! grep -q 'ci-changed' <<<"$(job drift.yml drift-prod)"
+  for j in plan plan-prod; do
+    b="$(job plan.yml "$j")"
+    grep -q 'fetch-depth: 2' <<<"$b"
+    grep -q 'shell: bash' <<<"$b"
+    grep -q 'git diff --no-renames' <<<"$b"
+  done
+}
+
+@test "both prod jobs pass and check the node locations variable" {
+  for spec in plan.yml:plan-prod drift.yml:drift-prod; do
+    b="$(job "${spec%%:*}" "${spec##*:}")"
+    grep -q 'TF_VAR_node_locations: ${{ vars.TF_PROD_NODE_LOCATIONS }}' <<<"$b"
+    grep -q 'TF_PROD_NODE_LOCATIONS: ${{ vars.TF_PROD_NODE_LOCATIONS }}' <<<"$b"
+    grep -q 'TF_PROD_NODE_LOCATIONS; do' <<<"$b"
+  done
+}

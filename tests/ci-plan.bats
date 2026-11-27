@@ -26,6 +26,7 @@ esc=$'\033[31m'; off=$'\033[0m'
 if [[ "$args" == *" -no-color "* ]]; then esc=""; off=""; fi
 err() { printf '%sError: %s%s\n' "$esc" "$1" "$off"; }
 if [[ "$args" == *" init "* ]]; then
+  if [[ -n "${TOFU_NEED_MASK:-}" && -z "${REDACT_LEAF_1:-}" ]]; then err 'tofu ran before the leaves were registered'; exit 1; fi
   if [[ "${TOFU_FAIL:-}" == init ]]; then err 'backend ***masked*** failed'; echo "  detail SENTINEL-DETAIL"; exit 1; fi
   echo "Initializing SENTINEL-INIT"; exit 0
 fi
@@ -45,6 +46,9 @@ if [[ "$args" == *" plan "* ]]; then
 fi
 if [[ "$args" == *" show "* ]]; then
   if [[ "${TOFU_FAIL:-}" == show ]]; then echo "  + name = SENTINEL-SHOW" >&2; err 'show failed' >&2; exit 1; fi
+  if [[ -n "${TOFU_ADDR:-}" ]]; then
+    printf '{"resource_changes":[{"address":"module.x.this[\\"%s:pull_request\\"]","change":{"actions":["create"]}},{"address":"module.x.that[\\"%s\\"]","change":{"actions":["update"]}}]}\n' "${TF_VAR_project_id}" "${REDACT_LEAF_1}"; exit 0
+  fi
   if [[ -n "${TOFU_EMPTY:-}" ]]; then echo '{"resource_changes":[]}'; exit 0; fi
   cat <<'JSON'
 {"resource_changes":[
@@ -203,4 +207,25 @@ JSON
 @test "without CI_MASK_JSON nothing is masked" {
   run "$SCRIPT" "$D/summary.md"
   run ! grep -q '::add-mask::' <<<"$output"
+}
+
+@test "the summary file is redacted: a TF_VAR value and a leaf inside an address" {
+  export TF_VAR_services="$(services_json)" CI_MASK_JSON=TF_VAR_services TOFU_ADDR=1
+  run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 0 ]
+  grep -qF -- '- `module.x.this["***:pull_request"]`: create' "$D/summary.md"
+  run ! grep -q 'SENTINEL' "$D/summary.md"
+}
+
+@test "masking happens before tofu init" {
+  export TF_VAR_services="$(services_json)" CI_MASK_JSON=TF_VAR_services TOFU_NEED_MASK=1
+  run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "the escaped forms of a dotted repository name are masked" {
+  export TF_VAR_services='{"a":{"github_repository":"own/my.repo"}}' CI_MASK_JSON=TF_VAR_services
+  run "$SCRIPT" "$D/summary.md"
+  grep -qxF '::add-mask::my\.repo' <<<"$output"
+  grep -qxF '::add-mask::my\\.repo' <<<"$output"
 }
