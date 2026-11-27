@@ -31,7 +31,7 @@ MOVES=(
 
 @test "every moved resource has a moved block into the module, and lives there, not in the root" {
   for a in "${MOVES[@]}"; do
-    [[ "$SRC" == *"moved{from=${a}to=module.state.${a}}"* ]]
+    [[ "$SRC" == *"moved{from=${a}to=module.state.${a}}"* ]] || false
     grep -qE "^resource \"${a%%.*}\" \"${a#*.}\" \{" "$M"
     run ! grep -qE "^resource \"${a%%.*}\" \"${a#*.}\" \{" "$B/main.tf"
   done

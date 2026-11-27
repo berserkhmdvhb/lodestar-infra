@@ -61,6 +61,15 @@ run "noncurrent_rule_needs_both_conditions" {
   }
 }
 
+run "key_rotates_every_90_days_by_default" {
+  command = plan
+
+  assert {
+    condition     = google_kms_crypto_key.state.rotation_period == "7776000s"
+    error_message = "default rotation must be 7776000s (90 days)"
+  }
+}
+
 run "key_rotates" {
   command = plan
 

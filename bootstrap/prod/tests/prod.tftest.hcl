@@ -43,3 +43,17 @@ run "bad_bucket_name_rejected" {
 
   expect_failures = [var.state_bucket_name]
 }
+
+# A fresh project: the GCS agent data source has no known member at plan time (no mocked member here).
+run "cmek_on_a_fresh_project" {
+  command = plan
+
+  variables {
+    bucket_cmek_enabled = true
+  }
+
+  assert {
+    condition     = module.state.state_bucket == "my-tofu-state-bucket"
+    error_message = "the plan must succeed with the agent grant deferred"
+  }
+}

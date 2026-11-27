@@ -5,7 +5,6 @@ resource "google_kms_key_ring" "state" {
   lifecycle {
     prevent_destroy = true
   }
-
 }
 
 resource "google_kms_crypto_key" "state" {

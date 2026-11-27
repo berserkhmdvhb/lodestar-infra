@@ -53,6 +53,26 @@ Keep `override.tf`: it is the only record of the backend.
 
 Other roots copy the final shape from `encryption.example.tf.txt`, with the key id in a variable.
 
+## After the module refactor
+
+The state resources now live in `modules/gcp-state-backend` and `main.tf` has `moved` blocks. On a state that
+predates the refactor, run:
+
+```bash
+tofu -chdir=bootstrap init
+tofu -chdir=bootstrap plan
+```
+
+`init` installs the module. The plan must show exactly 3 moves (key ring, key, bucket) and `0 to add, 0 to change,
+0 to destroy`. Anything else: stop. Then persist the moves and check:
+
+```bash
+tofu -chdir=bootstrap apply
+tofu -chdir=bootstrap plan
+```
+
+The last plan must say `No changes`.
+
 ## 4. Verify
 
 ```bash

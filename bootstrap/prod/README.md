@@ -34,6 +34,7 @@ The copy is git-ignored; never commit it. Set `project_id` to the production pro
 tofu -chdir=bootstrap/prod init
 tofu -chdir=bootstrap/prod plan -out=bootstrap-prod.tfplan
 tofu -chdir=bootstrap/prod apply bootstrap-prod.tfplan
+rm -f bootstrap/prod/bootstrap-prod.tfplan
 ```
 
 The state is a plain local `terraform.tfstate` (git-ignored) until step 3. If the apply fails with
@@ -148,6 +149,7 @@ to `~/platform-config`).
 ## 4. Verify
 
 ```bash
+BUCKET="$(tofu -chdir=bootstrap/prod output -raw state_bucket)"
 gcloud storage buckets describe "gs://${BUCKET}" --project "${PROJECT_ID}" \
   --format='yaml(versioning,uniform_bucket_level_access,public_access_prevention,retention_policy)'
 ```

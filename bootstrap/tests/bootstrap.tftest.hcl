@@ -35,6 +35,15 @@ run "bucket_name_reaches_the_module" {
   }
 }
 
+run "rotation_default_is_90_days" {
+  command = plan
+
+  assert {
+    condition     = var.kms_rotation_period == "7776000s" && module.state.kms_key_id != ""
+    error_message = "the root passes 7776000s (90 days) to the module by default"
+  }
+}
+
 run "bad_bucket_name_rejected" {
   command = plan
 
