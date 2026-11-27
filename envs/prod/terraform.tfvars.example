@@ -1,0 +1,33 @@
+# Copy to terraform.tfvars (git-ignored; never commit it). Placeholders only here.
+project_id           = "your-production-project-id"
+project_number       = "123456789012"
+billing_account      = "000000-000000-000000"
+state_bucket         = "your-unique-production-tofu-state-bucket"
+state_kms_key_id     = "projects/your-production-project-id/locations/europe-west1/keyRings/your-ring/cryptoKeys/your-key"
+ci_github_repository = "example-owner/example-infra-repo"
+ci_github_owner_id   = "111111111"
+ci_github_repo_id    = "333333333"
+ci_sub_claim_prefix  = "repo:example-owner@111111111/example-infra-repo@333333333"
+
+services = {
+  web = {
+    service_name        = "your-service-name"
+    github_repository   = "example-owner/example-repo"
+    github_owner_id     = "111111111"
+    github_repo_id      = "222222222"
+    sub_claim_prefix    = "repo:example-owner@111111111/example-repo@222222222"
+    deployer_account_id = "gh-deployer-web"
+    secret_keys         = ["stats-pass"]
+  }
+  site = {
+    service_name        = "your-site-name"
+    github_repository   = "example-owner/example-site"
+    github_owner_id     = "111111111"
+    github_repo_id      = "444444444"
+    sub_claim_prefix    = "repo:example-owner@111111111/example-site@444444444"
+    deployer_account_id = "gh-deployer-site"
+    secret_keys         = ["stats-pass"]
+  }
+}
+# region         = "europe-west1"
+# node_locations = ["europe-west1-b", "europe-west1-c"]
