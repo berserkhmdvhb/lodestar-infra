@@ -122,13 +122,11 @@ resource "google_container_node_pool" "this" {
   node_locations     = var.node_locations
   initial_node_count = var.min_node_count
 
-  # The provider forbids per-zone and total limits together: a total maximum turns min_node_count into the total minimum.
+  # Limits are per zone: a regional pool holds min..max nodes in each node location.
   autoscaling {
-    min_node_count       = var.total_max_node_count == null ? var.min_node_count : null
-    max_node_count       = var.total_max_node_count == null ? var.max_node_count : null
-    total_min_node_count = var.total_max_node_count == null ? null : var.min_node_count
-    total_max_node_count = var.total_max_node_count
-    location_policy      = var.location_policy
+    min_node_count  = var.min_node_count
+    max_node_count  = var.max_node_count
+    location_policy = var.location_policy
   }
 
   management {

@@ -352,10 +352,8 @@ run "new_inputs_default_to_todays_values" {
     condition = (
       one(google_container_node_pool.this.autoscaling).min_node_count == 1
       && one(google_container_node_pool.this.autoscaling).max_node_count == 3
-      && one(google_container_node_pool.this.autoscaling).total_min_node_count == null
-      && one(google_container_node_pool.this.autoscaling).total_max_node_count == null
     )
-    error_message = "per-zone limits and no total limits by default"
+    error_message = "per-zone limits 1 to 3"
   }
   assert {
     condition     = length(coalesce(google_container_node_pool.this.node_locations, [])) == 0 && length(coalesce(google_container_cluster.this.node_locations, [])) == 0
@@ -387,8 +385,8 @@ run "production_values_render" {
     location               = "europe-west1"
     node_locations         = ["europe-west1-b", "europe-west1-c"]
     location_policy        = "BALANCED"
-    total_max_node_count   = 6
-    min_node_count         = 2
+    min_node_count         = 1
+    max_node_count         = 2
     spot                   = false
     enable_public_endpoint = false
     labels                 = { cluster = "prod" }
@@ -408,15 +406,13 @@ run "production_values_render" {
   assert {
     condition = (
       one(google_container_node_pool.this.autoscaling).location_policy == "BALANCED"
-      && one(google_container_node_pool.this.autoscaling).total_max_node_count == 6
-      && one(google_container_node_pool.this.autoscaling).total_min_node_count == 2
-      && one(google_container_node_pool.this.autoscaling).max_node_count == null
-      && one(google_container_node_pool.this.autoscaling).min_node_count == null
+      && one(google_container_node_pool.this.autoscaling).min_node_count == 1
+      && one(google_container_node_pool.this.autoscaling).max_node_count == 2
     )
-    error_message = "total limits replace the per-zone limits (the provider forbids both)"
+    error_message = "per-zone limits 1 to 2 with BALANCED (a guaranteed node per zone, 4 nodes in total)"
   }
   assert {
-    condition     = google_container_node_pool.this.initial_node_count == 2
+    condition     = google_container_node_pool.this.initial_node_count == 1
     error_message = "initial_node_count follows min_node_count"
   }
   assert {

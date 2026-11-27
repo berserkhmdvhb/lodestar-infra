@@ -141,13 +141,13 @@ variable "disk_size_gb" {
 
 variable "min_node_count" {
   type        = number
-  description = "Minimum node count of the node pool autoscaler."
+  description = "Minimum node count per zone of the node pool autoscaler. Also the pool's initial_node_count, which is per zone and create-only (ignored after creation)."
   default     = 1
 }
 
 variable "max_node_count" {
   type        = number
-  description = "Maximum node count of the node pool autoscaler."
+  description = "Maximum node count per zone of the node pool autoscaler."
   default     = 3
 }
 
@@ -201,12 +201,6 @@ variable "location_policy" {
     condition     = contains(["ANY", "BALANCED"], var.location_policy)
     error_message = "location_policy must be ANY or BALANCED."
   }
-}
-
-variable "total_max_node_count" {
-  type        = number
-  description = "Total maximum node count across all zones. When set it replaces the per-zone maximum, and min_node_count becomes the total minimum (the provider forbids both kinds of limit together)."
-  default     = null
 }
 
 variable "oauth_scopes" {
