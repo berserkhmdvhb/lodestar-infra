@@ -13,7 +13,7 @@ ROOTS := $(sort $(patsubst %/,%,$(dir $(shell find bootstrap modules envs -name 
 TF_DIRS := $(wildcard bootstrap modules envs)
 NO_ROOTS = echo "no OpenTofu roots yet"
 
-.PHONY: tools tools-dry-run fmt validate lint test shellcheck secrets actions check
+.PHONY: tools tools-dry-run fmt validate tflint checkov lint test shellcheck secrets actions check
 
 tools:
 	@scripts/tools.sh install
@@ -37,15 +37,24 @@ else
 	  tofu -chdir="$$d" init -backend=false -input=false; tofu -chdir="$$d" validate; done
 endif
 
-lint:
+tflint:
 ifeq ($(ROOTS),)
 	@$(NO_ROOTS)
 else
 	@tflint --config="$(CURDIR)/.tflint.hcl" --init
 	@set -e; for d in $(ROOTS); do echo "==> tflint $$d"; \
 	  tflint --config="$(CURDIR)/.tflint.hcl" --chdir="$$d"; done
-	@checkov -d . --framework terraform --quiet --compact --skip-download --skip-path .tools
 endif
+
+# checkov: tests are excluded; a failed check or a file it cannot parse fails the build.
+checkov:
+ifeq ($(ROOTS),)
+	@$(NO_ROOTS)
+else
+	@scripts/checkov-gate.sh
+endif
+
+lint: tflint checkov
 
 test:
 ifeq ($(ROOTS),)
