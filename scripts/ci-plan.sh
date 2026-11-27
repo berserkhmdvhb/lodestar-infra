@@ -13,7 +13,11 @@
 # The workflow sets REDACT_WIF_PROVIDER and REDACT_SA from the CI identity secrets.
 # The plan file and the log live in a temporary directory that is removed on exit and never uploaded.
 # Writes `exitcode=0` (no changes) or `exitcode=2` (changes) to $GITHUB_OUTPUT.
-# Env: CI_PLAN_DIR (default envs/apps).
+# Structured inputs: CI_MASK_JSON names environment variables (space-separated) that hold JSON, such as
+# TF_VAR_services. Before any tofu command, every string and number leaf in them, and the owner and the repo of every
+# leaf shaped <owner>/<repo>, is registered with ::add-mask:: and exported as REDACT_LEAF_<n> for the literal
+# redaction (longest first). The value is read from the environment and never echoed; a parse failure prints no value.
+# Env: CI_PLAN_DIR (default envs/apps), CI_MASK_JSON (default none).
 set -Eeuo pipefail
 
 summary="${1:?usage: ci-plan.sh <summary-file>}"
@@ -21,6 +25,23 @@ dir="${CI_PLAN_DIR:-envs/apps}"
 work="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/ci-plan.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 log="$work/tofu.log"
+
+mask_json() {
+  local name leaf out n=0
+  for name in ${CI_MASK_JSON:-}; do
+    out="$(printenv "$name" | jq -r '
+      [.. | scalars | select(type == "string" or type == "number") | tostring | split("\n")[] | select(length > 0)] as $l
+      | ($l + [$l[] | select(test("^[^/]+/[^/]+$")) | split("/")[]]) | unique | .[]' 2>/dev/null)" ||
+      { echo "::error::${name} is not valid JSON"; exit 1; }
+    while IFS= read -r leaf; do
+      [[ -n "$leaf" ]] || continue
+      echo "::add-mask::${leaf}"
+      n=$((n + 1))
+      export "REDACT_LEAF_${n}=${leaf}"
+    done <<<"$out"
+  done
+}
+mask_json
 
 redact() {
   awk '

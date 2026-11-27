@@ -4,6 +4,7 @@
 # so the tests can prove neither reaches stdout, stderr or the summary.
 #   TOFU_FAIL   init, plan, show, long, sa or nested: that step exits 1 and prints error lines
 #               (long: one 300-character Error line that contains the project id in the middle;
+#               leaf: the Error line names every leaf of the fake services JSON
 #               sa: the Error line names REDACT_SA; nested: it names TF_VAR_nested, which contains the project id)
 #               show writes its plan text and Error line to STDERR, as the real tofu does
 #   TOFU_CODE   exit code of plan (default 2)
@@ -30,6 +31,7 @@ if [[ "$args" == *" init "* ]]; then
 fi
 if [[ "$args" == *" plan "* ]]; then
   if [[ "${TOFU_FAIL:-}" == plan ]]; then err 'reading ***masked*** failed'; echo "  detail SENTINEL-DETAIL"; exit 1; fi
+  if [[ "${TOFU_FAIL:-}" == leaf ]]; then err "denied for acme-SENTINEL/shop-SENTINEL, owner 424242 and prefix repo:acme-SENTINEL@424242/shop-SENTINEL@777"; exit 1; fi
   if [[ "${TOFU_FAIL:-}" == sa ]]; then err "denied for ${REDACT_SA}"; exit 1; fi
   if [[ "${TOFU_FAIL:-}" == nested ]]; then err "see ${TF_VAR_nested}"; exit 1; fi
   if [[ "${TOFU_FAIL:-}" == long ]]; then
@@ -162,4 +164,43 @@ STUB
 @test "a missing summary path is a usage error" {
   run "$SCRIPT"
   [ "$status" -ne 0 ]
+}
+
+# Fake services JSON: every value is a leaf that must be masked and redacted.
+services_json() {
+  cat <<'JSON'
+{"shop":{"service_name":"shop-SENTINEL","github_repository":"acme-SENTINEL/shop-SENTINEL","github_owner_id":"424242","github_repo_id":"777","sub_claim_prefix":"repo:acme-SENTINEL@424242/shop-SENTINEL@777","deployer_account_id":"deployer-SENTINEL","secret_keys":["KEY_ONE_SENTINEL","KEY_TWO_SENTINEL"]}}
+JSON
+}
+
+@test "every leaf of a structured input is masked before tofu runs, and owner and repo too" {
+  export TF_VAR_services="$(services_json)" CI_MASK_JSON=TF_VAR_services
+  run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 0 ]
+  for leaf in shop-SENTINEL acme-SENTINEL/shop-SENTINEL 424242 777 repo:acme-SENTINEL@424242/shop-SENTINEL@777 \
+    deployer-SENTINEL KEY_ONE_SENTINEL KEY_TWO_SENTINEL acme-SENTINEL; do
+    grep -qxF "::add-mask::${leaf}" <<<"$output"
+  done
+  run ! grep -v '^::add-mask::' <<<"$output"
+}
+
+@test "the leaves are redacted from an error line, and the unmasked JSON is never printed" {
+  export TF_VAR_services="$(services_json)" CI_MASK_JSON=TF_VAR_services
+  TOFU_FAIL=leaf run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 1 ]
+  out="$(grep -v '^::add-mask::' <<<"$output")"
+  grep -qxF 'Error: denied for ***, owner *** and prefix ***' <<<"$out"
+  run ! grep -q 'SENTINEL\|424242' <<<"$out"
+}
+
+@test "invalid JSON in a masked input fails without printing it" {
+  export TF_VAR_services="not json SENTINEL-BAD" CI_MASK_JSON=TF_VAR_services
+  run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 1 ]
+  run ! grep -q 'SENTINEL' <<<"$output"
+}
+
+@test "without CI_MASK_JSON nothing is masked" {
+  run "$SCRIPT" "$D/summary.md"
+  run ! grep -q '::add-mask::' <<<"$output"
 }

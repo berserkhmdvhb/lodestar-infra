@@ -1,8 +1,9 @@
 name: Drift
 
-# Weekly `tofu plan -detailed-exitcode` of envs/apps on main, with the same read-only keyless identity
+# Weekly `tofu plan -detailed-exitcode` of envs/apps and envs/prod on main (two separate jobs, each with its own
+# identity and its own issue), with the same read-only keyless identity
 # and the same no-log rules as plan.yml (scripts/ci-plan.sh). No changes: the open drift issue, if any,
-# is closed. Changes: one issue "Drift detected in envs/apps" is opened or updated, with the summary only
+# is closed. Changes: one issue "Drift detected in envs/<root>" per root is opened or updated, with the summary only
 # (resource addresses and actions, never values). A plan error fails the job.
 # The jobs must not use GitHub environments (the identity trusts the main-branch subject).
 # Setup: docs/ci-identity-runbook.md.
@@ -129,6 +130,126 @@ jobs:
           else
             {
               echo "The weekly plan of envs/apps found changes. The summary lists addresses and actions only, never values."
+              echo
+              cat "${RUNNER_TEMP}/summary.md"
+              echo
+              echo "Run: ${RUN_URL}"
+            } > "${RUNNER_TEMP}/issue.md"
+            if [[ -n "${number}" ]]; then
+              gh issue edit "${number}" --body-file "${RUNNER_TEMP}/issue.md"
+            else
+              gh issue create --title "${TITLE}" --body-file "${RUNNER_TEMP}/issue.md"
+            fi
+          fi
+
+      - name: Remove the summary files
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/summary.md" "${RUNNER_TEMP}/issue.md"
+
+  drift-prod:
+    name: Drift envs/prod
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    steps:
+      - name: Check that the production CI identity is configured
+        id: cfg
+        env:
+          TF_PROD_CI_WIF_PROVIDER: ${{ secrets.TF_PROD_CI_WIF_PROVIDER }}
+          TF_PROD_CI_SA: ${{ secrets.TF_PROD_CI_SA }}
+          TF_PROD_PROJECT_ID: ${{ secrets.TF_PROD_PROJECT_ID }}
+          TF_PROD_PROJECT_NUMBER: ${{ secrets.TF_PROD_PROJECT_NUMBER }}
+          TF_PROD_BILLING_ACCOUNT: ${{ secrets.TF_PROD_BILLING_ACCOUNT }}
+          TF_PROD_SERVICES: ${{ secrets.TF_PROD_SERVICES }}
+          TF_PROD_CI_GITHUB_REPOSITORY: ${{ secrets.TF_PROD_CI_GITHUB_REPOSITORY }}
+          TF_PROD_CI_GITHUB_OWNER_ID: ${{ secrets.TF_PROD_CI_GITHUB_OWNER_ID }}
+          TF_PROD_CI_GITHUB_REPO_ID: ${{ secrets.TF_PROD_CI_GITHUB_REPO_ID }}
+          TF_PROD_CI_SUB_CLAIM_PREFIX: ${{ secrets.TF_PROD_CI_SUB_CLAIM_PREFIX }}
+          TF_PROD_STATE_BUCKET: ${{ secrets.TF_PROD_STATE_BUCKET }}
+          TF_PROD_STATE_KMS_KEY_ID: ${{ secrets.TF_PROD_STATE_KMS_KEY_ID }}
+          TF_PROD_REGION: ${{ vars.TF_PROD_REGION }}
+        run: |
+          missing=0
+          for name in \
+            TF_PROD_CI_WIF_PROVIDER TF_PROD_CI_SA TF_PROD_PROJECT_ID TF_PROD_PROJECT_NUMBER \
+            TF_PROD_BILLING_ACCOUNT TF_PROD_SERVICES TF_PROD_CI_GITHUB_REPOSITORY TF_PROD_CI_GITHUB_OWNER_ID \
+            TF_PROD_CI_GITHUB_REPO_ID TF_PROD_CI_SUB_CLAIM_PREFIX TF_PROD_STATE_BUCKET \
+            TF_PROD_STATE_KMS_KEY_ID TF_PROD_REGION; do
+            if [[ -z "${!name}" ]]; then missing=1; fi
+          done
+          if [[ "${missing}" -eq 1 ]]; then
+            echo "configured=false" >> "${GITHUB_OUTPUT}"
+            echo "Production CI identity not configured yet; see docs/ci-identity-runbook.md" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "configured=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.cfg.outputs.configured == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Install OpenTofu (the pinned release only)
+        if: steps.cfg.outputs.configured == 'true'
+        run: |
+          scripts/tools.sh install tofu
+          echo "${GITHUB_WORKSPACE}/.tools/bin" >> "${GITHUB_PATH}"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        if: steps.cfg.outputs.configured == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.TF_PROD_CI_WIF_PROVIDER }}
+          service_account: ${{ secrets.TF_PROD_CI_SA }}
+
+      - name: Plan (summary only)
+        id: plan
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          TF_VAR_project_id: ${{ secrets.TF_PROD_PROJECT_ID }}
+          TF_VAR_project_number: ${{ secrets.TF_PROD_PROJECT_NUMBER }}
+          TF_VAR_billing_account: ${{ secrets.TF_PROD_BILLING_ACCOUNT }}
+          TF_VAR_services: ${{ secrets.TF_PROD_SERVICES }}
+          TF_VAR_ci_github_repository: ${{ secrets.TF_PROD_CI_GITHUB_REPOSITORY }}
+          TF_VAR_ci_github_owner_id: ${{ secrets.TF_PROD_CI_GITHUB_OWNER_ID }}
+          TF_VAR_ci_github_repo_id: ${{ secrets.TF_PROD_CI_GITHUB_REPO_ID }}
+          TF_VAR_ci_sub_claim_prefix: ${{ secrets.TF_PROD_CI_SUB_CLAIM_PREFIX }}
+          TF_VAR_state_bucket: ${{ secrets.TF_PROD_STATE_BUCKET }}
+          TF_VAR_state_kms_key_id: ${{ secrets.TF_PROD_STATE_KMS_KEY_ID }}
+          TF_VAR_region: ${{ vars.TF_PROD_REGION }}
+          CI_PLAN_DIR: envs/prod
+          CI_MASK_JSON: TF_VAR_services
+          REDACT_WIF_PROVIDER: ${{ secrets.TF_PROD_CI_WIF_PROVIDER }}
+          REDACT_SA: ${{ secrets.TF_PROD_CI_SA }}
+        run: |
+          scripts/ci-plan.sh "${RUNNER_TEMP}/summary.md"
+          {
+            echo "### Drift check of envs/prod"
+            echo
+            cat "${RUNNER_TEMP}/summary.md"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Open, update or close the drift issue
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EXITCODE: ${{ steps.plan.outputs.exitcode }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: Drift detected in envs/prod
+        run: |
+          number="$(gh issue list --state open --author app/github-actions --limit 100 --json number,title \
+            --jq "[.[] | select(.title == \"${TITLE}\")][0].number // empty")"
+          if [[ "${EXITCODE}" == "0" ]]; then
+            if [[ -n "${number}" ]]; then
+              gh issue close "${number}" --comment "No drift in the latest run: ${RUN_URL}"
+            fi
+          else
+            {
+              echo "The weekly plan of envs/prod found changes. The summary lists addresses and actions only, never values."
               echo
               cat "${RUNNER_TEMP}/summary.md"
               echo
