@@ -128,7 +128,29 @@
 - managed Prometheus, and system plus workload logging;
 - an autoscaled node pool, with an optional spot variant;
 - labels.
-- [ ] **Tests:** every setting in the list above; the node service account isn't the default compute account.
+- [x] **Tests:** every setting in the list above; the node service account isn't the default compute account.
+
+**Executed (2026-11-27, commit db877a8):** `modules/gcp-gke`, import-shaped against the owner's live cluster. The values were written from the owner's private, read-only exports, and no identifying value is in Git.
+- **Cluster:**
+  - a zonal `apps`, built without an inline pool;
+  - it ignores `node_pool`, `node_config`, `initial_node_count` and `remove_default_node_pool`;
+  - STABLE channel, private nodes, the DNS endpoint with external traffic allowed, the IP endpoint kept (a variable can close it later);
+  - Dataplane V2, Workload Identity, Gateway API standard;
+  - system and workload logging, plus managed Prometheus;
+  - the Sat/Sun 00:00 to 08:00 UTC window, the `cluster=apps` label, cost allocation, `deletion_protection`;
+  - Binary Authorization is a variable, unset.
+- **Separate `default-pool`:**
+  - spot e2-standard-2, pd-balanced 50 GB, COS_CONTAINERD, autoscaling 1 to 3 with `ANY`;
+  - the node SA (a validation refuses the default compute account);
+  - exactly the two live OAuth scopes, legacy metadata endpoints disabled, shielded secure boot and integrity, GKE_METADATA;
+  - auto repair and upgrade, SURGE 1;
+  - it ignores `node_count` and `initial_node_count`.
+- **Results:** 14 tests; `make check` green.
+- **Review:** clean. Every value the module sets equals live, and the sections it leaves unset are Optional+Computed in provider 8.12.0.
+- **Carried to L1.5:** an "expected or possible diff" checklist for the owner's first plan, and a hard stop on any replacement.
+- **Carried to L1.4 (post-import hardening):** the insecure RBAC bindings, security posture, application-layer secrets encryption, and the node scopes.
+
+**Order (ruling 2026-11-27):** L1.5, the import, runs before L1.4, because L1.4 changes live resources.
 
 ### Task L1.4: The GKE security baseline extras
 **Files:** VPC flow logs on the subnet, Data Access audit logging for the container API, and the `gke-security-posture` settings where the provider supports them.
