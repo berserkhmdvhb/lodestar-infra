@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Safely extract a tar archive: safe_extract.py <archive> <dest>.
+"""Safely extract a tar or zip archive: safe_extract.py <archive> <dest>.
 
-Zip archives (tflint publishes zips) are checked member by member: no absolute names, no "..",
-no symlink or special entries; then the same tree check runs.
-Uses tarfile's "data" filter (PEP 706), which refuses absolute names, ".." escapes, links and
+Zip archives (tflint publishes zips) are checked member by member: no member escapes dest (absolute
+names, ".."), and only regular files and directories are allowed; then the same tree check runs.
+Tar archives use tarfile's "data" filter (PEP 706), which refuses absolute names, ".." escapes, links and
 hardlinks pointing outside dest, and device or special files, and strips setuid/setgid bits.
 After extraction it re-checks, as a second layer, that every symlink resolves inside dest and that
 no regular file shares an inode with a path outside dest.
@@ -57,6 +57,8 @@ def extract_zip(archive: Path, dest: Path) -> None:
             if target != root and not target.startswith(root + os.sep):
                 msg = f"member {info.filename} escapes {dest}"
                 raise UnsafeTreeError(msg)
+            # Zip members written without Unix attributes (e.g. by Windows tools) have mode 0:
+            # nothing to check, so only members that do carry a mode are type-checked.
             if mode and not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
                 msg = f"member {info.filename} is not a regular file or directory"
                 raise UnsafeTreeError(msg)

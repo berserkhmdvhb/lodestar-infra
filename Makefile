@@ -44,7 +44,7 @@ else
 	@tflint --config="$(CURDIR)/.tflint.hcl" --init
 	@set -e; for d in $(ROOTS); do echo "==> tflint $$d"; \
 	  tflint --config="$(CURDIR)/.tflint.hcl" --chdir="$$d"; done
-	@checkov -d . --framework terraform --quiet --compact --skip-download
+	@checkov -d . --framework terraform --quiet --compact --skip-download --skip-path .tools
 endif
 
 test:
