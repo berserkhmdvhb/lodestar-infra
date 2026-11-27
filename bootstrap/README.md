@@ -28,74 +28,31 @@ Edit `terraform.tfvars`: at least `project_id` and a globally unique `state_buck
 
 ## 2. First apply (local state)
 
+From the repository root:
+
 ```bash
-tofu init
-tofu plan
-tofu apply
+tofu -chdir=bootstrap init
+tofu -chdir=bootstrap plan -out=bootstrap.tfplan
+tofu -chdir=bootstrap apply bootstrap.tfplan
 ```
 
 The state is a plain local `terraform.tfstate` (git-ignored) until step 3.
 
 ## 3. Migrate the state into the bucket, encrypted
 
-Create `override.tf` next to the code (git-ignored). Backends cannot use variables, so write the
-bucket name in; the key id is the `kms_key_id` output.
-
-```bash
-BUCKET="$(tofu output -raw state_bucket)"
-KEY="$(tofu output -raw kms_key_id)"
-printf 'bucket=%s\nkey=%s\n' "${BUCKET}" "${KEY}"
-```
-
-```hcl
-terraform {
-  backend "gcs" {
-    bucket = "<the bucket>"
-    prefix = "bootstrap"
-  }
-
-  encryption {
-    key_provider "gcp_kms" "state" {
-      kms_encryption_key = "<the key id>"
-      key_length         = 32
-    }
-    method "aes_gcm" "state" {
-      keys = key_provider.gcp_kms.state
-    }
-    method "unencrypted" "migrate" {}
-    state {
-      method   = method.aes_gcm.state
-      enforced = false
-      fallback {
-        method = method.unencrypted.migrate
-      }
-    }
-    plan {
-      method   = method.aes_gcm.state
-      enforced = false
-      fallback {
-        method = method.unencrypted.migrate
-      }
-    }
-  }
-}
-```
-
-```bash
-tofu init -migrate-state
-tofu plan    # should show no changes
-```
-
-Then, in `override.tf`, delete both `fallback` blocks and the `unencrypted` method and set
-`enforced = true` in `state` and `plan`. Run `tofu plan` once more; the state in the bucket is
-now rewritten encrypted. Delete the old local `terraform.tfstate*` files.
+The exact commands, with a proof after each step before anything is deleted, are in
+[`docs/import-runbook.md`](../docs/import-runbook.md), section 1, "Move bootstrap's own state into the
+bucket, encrypted". They write the git-ignored `bootstrap/override.tf` (the backend and the encryption
+block). The backend needs the literal bucket name, so the commands read it from the `state_bucket` output.
+Keep `override.tf`: it is the only record of the backend.
 
 Other roots copy the final shape from `encryption.example.tf.txt`, with the key id in a variable.
 
 ## 4. Verify
 
 ```bash
-gcloud storage buckets describe "gs://${BUCKET}" \
+BUCKET="$(tofu -chdir=bootstrap output -raw state_bucket)"
+gcloud storage buckets describe "gs://${BUCKET}" --project "${PROJECT_ID}" \
   --format='yaml(versioning,uniform_bucket_level_access,public_access_prevention,retention_policy)'
 ```
 

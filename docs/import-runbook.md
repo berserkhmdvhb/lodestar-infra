@@ -41,24 +41,133 @@ project_id        = "${PROJECT_ID}"
 state_bucket_name = "${PROJECT_ID}-tofu-state"
 EOF
 tofu -chdir=bootstrap init
-tofu -chdir=bootstrap plan
+tofu -chdir=bootstrap plan -out=bootstrap.tfplan
 ```
 
 Expected: `Plan: 5 to add, 0 to change, 0 to destroy.` (2 APIs, key ring, key, bucket) and nothing else.
-If the bucket name is taken, change `state_bucket_name` and plan again. Then:
+Review it, then apply exactly that plan:
 
 ```bash
-tofu -chdir=bootstrap apply
+tofu -chdir=bootstrap apply bootstrap.tfplan
+rm -f bootstrap/bootstrap.tfplan
 ```
 
-Now move bootstrap's own state into the bucket, encrypted: follow `bootstrap/README.md`, step 3
-("Migrate the state into the bucket, encrypted"), with `-chdir=bootstrap` on each command or from inside
-`bootstrap/`. When its last `tofu plan` shows no changes, read the two values for step 2:
+If the apply fails with `SERVICE_DISABLED` right after the Cloud KMS API was enabled, wait a minute and
+run the apply again (plan again first if the saved plan was deleted). If it fails on the bucket name (a
+plan cannot detect a taken name), choose another `state_bucket_name` in `bootstrap/terraform.tfvars` and
+apply again; the key ring and key already exist and stay (key rings are permanent).
+
+### Move bootstrap's own state into the bucket, encrypted
+
+Until now the bootstrap state is a plain local file. Every command runs from the repository root.
 
 ```bash
-STATE_BUCKET="$(tofu -chdir=bootstrap output -raw state_bucket)"
-STATE_KMS_KEY_ID="$(tofu -chdir=bootstrap output -raw kms_key_id)"
-printf 'bucket=%s\nkey=%s\n' "${STATE_BUCKET}" "${STATE_KMS_KEY_ID}"
+BUCKET="$(tofu -chdir=bootstrap output -raw state_bucket)"
+KEY="$(tofu -chdir=bootstrap output -raw kms_key_id)"
+printf 'bucket=%s\nkey=%s\n' "${BUCKET}" "${KEY}"
+```
+
+Both must print a value. Write the migration form (it can still read the plain state):
+
+```bash
+cat > bootstrap/override.tf <<EOF
+terraform {
+  backend "gcs" {
+    bucket = "${BUCKET}"
+    prefix = "bootstrap"
+  }
+
+  encryption {
+    key_provider "gcp_kms" "state" {
+      kms_encryption_key = "${KEY}"
+      key_length         = 32
+    }
+
+    method "aes_gcm" "state" {
+      keys = key_provider.gcp_kms.state
+    }
+
+    method "unencrypted" "migrate" {}
+
+    state {
+      method = method.aes_gcm.state
+      fallback {
+        method = method.unencrypted.migrate
+      }
+    }
+
+    plan {
+      method = method.aes_gcm.state
+      fallback {
+        method = method.unencrypted.migrate
+      }
+    }
+  }
+}
+EOF
+tofu -chdir=bootstrap init -migrate-state
+```
+
+Answer `yes` to copying the state to the new backend. Proof that the object in the bucket is encrypted:
+
+```bash
+gcloud storage cat "gs://${BUCKET}/bootstrap/default.tfstate" --project "${PROJECT_ID}" | head -c 300
+```
+
+It must show `encrypted_data` and no `resources`. If it shows plain JSON: keep the fallback, run
+`tofu -chdir=bootstrap apply` (expect `No changes`; it saves the state again with the new method), and
+check again.
+
+Now write the final form (no fallback, no `unencrypted` method, encryption enforced):
+
+```bash
+cat > bootstrap/override.tf <<EOF
+terraform {
+  backend "gcs" {
+    bucket = "${BUCKET}"
+    prefix = "bootstrap"
+  }
+
+  encryption {
+    key_provider "gcp_kms" "state" {
+      kms_encryption_key = "${KEY}"
+      key_length         = 32
+    }
+
+    method "aes_gcm" "state" {
+      keys = key_provider.gcp_kms.state
+    }
+
+    state {
+      method   = method.aes_gcm.state
+      enforced = true
+    }
+
+    plan {
+      method   = method.aes_gcm.state
+      enforced = true
+    }
+  }
+}
+EOF
+tofu -chdir=bootstrap plan
+```
+
+It must say `No changes`. Without the fallback OpenTofu refuses plain state, so this is a second proof.
+Only then delete the old local copies:
+
+```bash
+rm -f bootstrap/terraform.tfstate bootstrap/terraform.tfstate.backup
+```
+
+`bootstrap/override.tf` is now the only record of the backend. It is git-ignored, so keep it (or back it
+up to `~/platform-config`).
+
+Read the two values for step 2:
+
+```bash
+STATE_BUCKET="${BUCKET}"
+STATE_KMS_KEY_ID="${KEY}"
 ```
 
 ## 2. The import plan
@@ -99,9 +208,11 @@ Plan: 41 to import, 0 to add, N to change, 0 to destroy.
   service accounts, 3 impersonation members, 3 cluster-viewer members), 5 conditional secret
   accessors, 7 secrets, 1 budget, 2 cluster and pool.
 - `0 to add` and `0 to destroy`, exactly.
-- `N to change` may only be fields that exist in the provider and not in Google Cloud: the 9 APIs
-  (`disable_on_destroy`, `disable_dependent_services`) and the cluster (`deletion_protection`). So N is
-  at most 10. Applying them writes to state only.
+- `N to change` is at most 10 in-place updates: 9 `google_project_service` (`disable_on_destroy`,
+  `disable_dependent_services`) and 1 `google_container_cluster` (`resource_labels` and
+  `terraform_labels` gaining `"cluster" = "apps"`). `deletion_protection` does not appear (the importer
+  sets it to true). These are provider-side or state-only fields; applying them does not change the
+  cluster in Google Cloud.
 - A "to change" line on anything else, or on any other attribute, is a stop: paste the plan.
 
 ### HARD STOP
@@ -117,6 +228,23 @@ tofu -chdir=envs/apps show -no-color import.tfplan | grep -nE 'must be replaced|
 
 Only the summary line (`... 0 to destroy.`) may match. Anything else is a hard stop.
 
+Then check every changed attribute of the saved plan:
+
+```bash
+tofu -chdir=envs/apps show -no-color import.tfplan | grep -nE '^ *[-+~] |will be updated in-place'
+```
+
+Expected, and nothing else:
+
+- the legend line `~ update in-place`;
+- 10 `will be updated in-place` lines, each with a `~ resource` header: 9 `google_project_service`
+  and 1 `google_container_cluster`;
+- under each API: a `~ disable_dependent_services` line and a `~ disable_on_destroy` line;
+- under the cluster: a `~ resource_labels = {` line and a `~ terraform_labels = {` line, each followed by
+  `+ "cluster" = "apps"`.
+
+Any other line: stop and paste the plan.
+
 ### Possible differences to expect in the cluster and pool (each means stop and paste)
 
 These come from the GKE module review: the live cluster was made with `gcloud`, which sets values the
@@ -125,7 +253,6 @@ module may not state.
 | Where in the plan | What it looks like | Why |
 | --- | --- | --- |
 | Node pool `kubelet_config` | `- kubelet_config { ... }` or `+ kubelet_config { ... }` (for example `cpu_cfs_quota`, `pod_pids_limit`) | GKE fills defaults the module leaves unset |
-| Cluster `control_plane_egress` | a `control_plane_egress` / `private_cluster_config` line marked `~` | the live cluster reports a value the module does not set |
 | Node pool `network_config`, `max_pods_per_node` | `~ network_config { ... }` or `~ max_pods_per_node` (often `forces replacement`) | create-time settings that cannot change in place |
 | Cluster `ip_endpoints_config` sub-fields | `~ ip_endpoints_config { ... }` with `enabled`, `private_endpoint_enforcement_enabled`, `global_access` | the public endpoint is on and private enforcement is reported back |
 
@@ -161,7 +288,7 @@ The outputs (`GCP_PROJECT_ID`, `GKE_CLUSTER`, `GKE_LOCATION`, `GCP_WIF_PROVIDER`
 The cluster, in place and healthy:
 
 ```bash
-gcloud container clusters describe "${CLUSTER}" --zone "${ZONE}" \
+gcloud container clusters describe "${CLUSTER}" --zone "${ZONE}" --project "${PROJECT_ID}" \
   --format='yaml(status,releaseChannel.channel,controlPlaneEndpointsConfig.dnsEndpointConfig.allowExternalTraffic,privateClusterConfig.enablePrivateNodes)'
 ```
 
@@ -171,7 +298,7 @@ The provider condition still pins your owner and repository IDs and the two work
 
 ```bash
 actual="$(gcloud iam workload-identity-pools providers describe github-oidc \
-  --location=global --workload-identity-pool=github --format='value(attributeCondition)')"
+  --project "${PROJECT_ID}" --location=global --workload-identity-pool=github --format='value(attributeCondition)')"
 [[ "${actual}" == *"repository_owner_id=='${GH_OWNER_ID}'"* && "${actual}" == *"repository_id=='${GH_REPO_ID}'"* && "${actual}" == *"deploy-ops"* ]] \
   && printf 'condition matches\n' || printf 'DIFFERENT: compare by eye\n'
 ```
@@ -182,6 +309,7 @@ Each deployer can be impersonated only by its own environment:
 for env in dev qa production; do
   printf '%s: ' "${env}"
   gcloud iam service-accounts get-iam-policy "gh-deployer-${env}@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --project "${PROJECT_ID}" \
     --format='value(bindings.members)'
 done
 ```

@@ -3,9 +3,9 @@
 The shared platform for Kynosura and the fullstack template, as code: a GKE cluster and the
 Cloudflare edge in front of it, written in OpenTofu.
 
-Everything here is written and tested without ever being applied. CI validates, lints and runs
-mock-provider tests; it never holds cloud credentials and never runs `tofu apply`. A person applies
-changes from a local machine.
+CI validates, lints and runs mock-provider tests; it never holds cloud credentials and never runs
+`tofu apply`. The agent that wrote this code never applies it. The owner applies the bootstrap once and,
+after reviewing the plan, runs the state-only import by hand: see [`docs/import-runbook.md`](docs/import-runbook.md).
 
 ## Layout
 
@@ -13,8 +13,8 @@ changes from a local machine.
 | --- | --- |
 | `bootstrap/` | One-off root that creates the remote-state bucket |
 | `modules/` | Reusable modules, each with a `tofu test` file using mock providers |
-| `envs/dev/` | The dev environment root, composed from the modules |
-| `docs/` | Plans and decisions |
+| `envs/apps/` | The root for the apps cluster, composed from the modules |
+| `docs/` | Plans, decisions and the import runbook |
 | `tools/` | `pins.tsv` (pinned, checksum-verified toolchain) and hash-pinned Python requirements |
 | `scripts/` | `tools.sh` installer and its safe archive extractor |
 | `tests/` | Bats tests for the installer |
@@ -40,11 +40,9 @@ With no OpenTofu roots yet, each target prints `no OpenTofu roots yet` and succe
 
 ## Applying (by hand, never from CI)
 
-1. Bootstrap the state bucket from `bootstrap/`.
-2. Set the variables locally (copy the `*.tfvars.example` file to `*.tfvars`, which Git ignores).
-3. Review `tofu plan`.
-4. `tofu apply`.
-5. Run the verification checks in the setup guides.
+Follow [`docs/import-runbook.md`](docs/import-runbook.md): bootstrap the state bucket once, then plan,
+review and apply the import of `envs/apps` (variables go in git-ignored `*.tfvars` files), then run the
+verification checks.
 
 The step-by-step guides live in the fullstack template repository: `wiki/gke-cluster-setup.md` and
 `wiki/cloudflare-setup.md`.

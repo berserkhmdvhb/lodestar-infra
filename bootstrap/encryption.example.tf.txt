@@ -14,7 +14,7 @@ variable "kms_key_id" {
 
 terraform {
   backend "gcs" {
-    # bucket and prefix come from -backend-config (backends cannot use variables)
+    # bucket and prefix come from -backend-config (or a variable or local that resolves at init)
   }
 
   encryption {
