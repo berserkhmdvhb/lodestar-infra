@@ -98,3 +98,16 @@ slug() { tr 'A-Z' 'a-z' | sed -E 's/[`]//g; s/[^a-z0-9 _-]//g; s/ /-/g'; }
     | awk '/ will be created$/ {split($2, a, "."); print a[1] "." a[2]}' | sort | uniq -c | tr -s ' ')"
   [ "$out" = $' 2 module.github_wif["web"]\n 1 module.project' ]
 }
+
+@test "every directory with a lock file is listed in dependabot.yml" {
+  cd "$ROOT"
+  missing=""
+  while IFS= read -r d; do
+    d="/${d%/.terraform.lock.hcl}"
+    case "$d" in
+      /modules/*) grep -qE '^      - /modules/\*$' .github/dependabot.yml || missing="$missing $d" ;;
+      *) grep -qE "^      - ${d}\$" .github/dependabot.yml || missing="$missing $d" ;;
+    esac
+  done < <(find bootstrap envs modules -name .terraform.lock.hcl -not -path '*/.terraform/*')
+  [ -z "$missing" ] || { echo "not in dependabot.yml:$missing"; return 1; }
+}

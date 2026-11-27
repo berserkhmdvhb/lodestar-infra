@@ -4,7 +4,7 @@ You run every command here yourself, by hand, in zsh, with your own `gcloud` log
 when something differs. Nothing in this repository applies anything on its own. It builds the production
 project from [`envs/prod`](../envs/prod) and [`bootstrap/prod`](../bootstrap/prod): its own project, state bucket,
 KMS keys, regional GKE cluster `prod`, deploy identities, secret containers and budget. The design is in
-`docs/plans/`. The commands of each stage are adapted from what was run for `apps`: the
+`docs/designs/2026-11-27-production-environment.md`. The commands of each stage are adapted from what was run for `apps`: the
 [operations runbook](operations-runbook.md) (stages named "ops 5.3" and so on), the
 [import runbook](import-runbook.md), the [hardening runbook](hardening-runbook.md) and the
 [CI identity runbook](ci-identity-runbook.md).

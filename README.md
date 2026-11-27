@@ -14,10 +14,13 @@ after reviewing the plan, runs the state-only import by hand: see [`docs/import-
 | `bootstrap/` | One-off root that creates the remote-state bucket (non-production), with `bootstrap/prod/` for the production project |
 | `modules/` | Reusable modules, each with a `tofu test` file using mock providers |
 | `modules/gcp-platform-secret` | Secret containers for non-app namespaces (the Cloudflare tunnel token) with one conditional access grant each; see [operations runbook 8.6](docs/operations-runbook.md) |
+| `modules/gcp-state-backend` | The state bucket and its KMS key, used by `bootstrap/` and `bootstrap/prod/` |
+| `modules/gcp-gke-connect-role` | The custom role that lets a deployer reach the cluster's DNS endpoint, created once per project |
 | `envs/apps/` | The root for the apps cluster, composed from the modules |
+| `envs/prod/` | The root for the production project and its regional cluster; built by the [production runbook](docs/production-runbook.md) |
 | `docs/` | Plans, decisions, the import runbook, the hardening runbook, the [CI identity runbook](docs/ci-identity-runbook.md) and the [operations runbook](docs/operations-runbook.md) of every manual step |
 | `tools/` | `pins.tsv` (pinned, checksum-verified toolchain) and hash-pinned Python requirements |
-| `scripts/` | `tools.sh` installer and its safe archive extractor; `github-settings.sh` (repository settings as code); `ci-plan.sh` (the CI plan summary) |
+| `scripts/` | `tools.sh` installer and its safe archive extractor; `github-settings.sh` (repository settings as code); `ci-plan.sh` (the CI plan summary); `ci-changed.sh` (which roots a change touches) |
 | `tests/` | Bats tests for the installer, the settings script and the CI plan script |
 | `.github/` | Workflows (CI, PR title, Scorecard, Plan, Drift), Dependabot and the pull request template |
 
