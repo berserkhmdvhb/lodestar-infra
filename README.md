@@ -49,6 +49,8 @@ applies anything. Its last job, **`CI OK`**, fails unless every other job passed
 together with **`PR title (Conventional Commits)`** from `pr-title.yml`. `scorecard.yml` publishes an OpenSSF
 Scorecard weekly.
 
+The IaC security scan is its own step (`IaC security scan (checkov)`, `make checkov`): test files are excluded, and a failed check or a file checkov cannot parse fails the build.
+
 zizmor runs offline, so its online audits (impostor-commit, known-vulnerable-actions) are skipped: the
 action SHA pins are not network-verified in CI.
 
@@ -58,6 +60,8 @@ To protect `main`, the owner runs this once, logged in with their own `gh auth l
 bash scripts/github-settings.sh            # dry run: prints every call and the ruleset JSON
 bash scripts/github-settings.sh --apply    # applies it; safe to repeat (the ruleset is updated in place)
 ```
+
+Run it from this checkout: it reads the repository from `origin` and ignores `GH_REPO`.
 
 Run `--apply` only after the first push or pull request has produced both checks (`CI OK` and
 `PR title (Conventional Commits)`) once, so the first pull request can merge.

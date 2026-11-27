@@ -30,7 +30,16 @@ jobs:
         with:
           enable-cache: false
       - run: make tools
-      - run: make fmt validate lint test
+      - name: Format (tofu fmt)
+        run: make fmt
+      - name: Validate (tofu validate)
+        run: make validate
+      - name: Lint (tflint)
+        run: make tflint
+      - name: IaC security scan (checkov)
+        run: make checkov
+      - name: Tests (tofu test, bats)
+        run: make test
 
   repo:
     name: Repository (shellcheck, gitleaks)
