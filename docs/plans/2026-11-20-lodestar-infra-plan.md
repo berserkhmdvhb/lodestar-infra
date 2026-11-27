@@ -61,7 +61,21 @@
 
 ### Task L1.1: The state bootstrap
 **Files:** `bootstrap/` (a GCS bucket with versioning, uniform bucket-level access, public access prevention, an optional CMEK key, and a retention lock on noncurrent versions), plus `bootstrap/README.md` (a one-time apply with local state, then migrate).
-- [ ] **Tests:** the bucket is versioned, has uniform access and prevents public access.
+- [x] **Tests:** the bucket is versioned, has uniform access and prevents public access.
+
+**Executed (2026-11-27, commits 0092ab2, dd2b3ea and bb13540):**
+- **What exists:** `bootstrap/`, with:
+  - the `cloudkms` and `storage` APIs;
+  - a KMS key ring and key (rotation a variable, 90 days by default; `prevent_destroy`);
+  - the state bucket: versioned, uniform access, public access prevention enforced, `force_destroy = false`, `prevent_destroy`, and a noncurrent-version rule needing both age and count;
+  - optional CMEK, with the storage agent granted before the bucket uses the key;
+  - optional `state_admins` (bucket and key bindings), with a validation that refuses `allUsers` and `allAuthenticatedUsers`;
+  - the `state_bucket` and `kms_key_id` outputs.
+- **Shape:** the root is in its first-apply shape (local state). The README's migration step adds the `gcs` backend and the `aes_gcm` + `gcp_kms` encryption in an untracked `override.tf`. `encryption.example.tf.txt` holds the final block that other roots copy.
+- **Pins:** google provider 8.12.0 (2026-11-17), tofu 1.13.9.
+- **Results:** `tofu test` 9/9, with mock provider, plan only; `make check` and `pre-commit run --all-files` green. checkov skips only CKV_GCP_62 (bucket access logs), with the reason inline.
+- **Also:** the L0.1 deferred minors (the `safe_extract.py` docs and comment, the bats pin note, checkov `--skip-path .tools`).
+- **Review:** spec ✅. One Important finding: the public-member test asserted nothing. Fixed in round 1 with the validation and two `expect_failures` runs, and re-reviewed clean. Four minors are deferred to the phase review, one of them a README sentence to correct before the owner applies.
 
 ### Task L1.2: Google Cloud network and identity modules
 **Files:**
