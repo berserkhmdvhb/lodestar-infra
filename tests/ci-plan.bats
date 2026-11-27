@@ -43,6 +43,9 @@ if [[ "$args" == *" plan "* ]]; then
 fi
 if [[ "$args" == *" show "* ]]; then
   if [[ "${TOFU_FAIL:-}" == show ]]; then echo "  + name = SENTINEL-SHOW" >&2; err 'show failed' >&2; exit 1; fi
+  if [[ -n "${TOFU_ADDR:-}" ]]; then
+    printf '{"resource_changes":[{"address":"module.x.this[\\"%s:pull_request\\"]","change":{"actions":["create"]}}]}\n' "${TF_VAR_project_id}"; exit 0
+  fi
   if [[ -n "${TOFU_EMPTY:-}" ]]; then echo '{"resource_changes":[]}'; exit 0; fi
   cat <<'JSON'
 {"resource_changes":[
@@ -162,4 +165,11 @@ STUB
 @test "a missing summary path is a usage error" {
   run "$SCRIPT"
   [ "$status" -ne 0 ]
+}
+
+@test "the summary file is redacted: a TF_VAR value inside an address" {
+  TOFU_ADDR=1 run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 0 ]
+  grep -qF -- '- `module.x.this["***:pull_request"]`: create' "$D/summary.md"
+  run ! grep -q SENTINEL "$D/summary.md"
 }
