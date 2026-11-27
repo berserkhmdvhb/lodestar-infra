@@ -11,7 +11,9 @@ node service account, and labels. Binary Authorization is off until `binary_auth
 
 Inputs: `project_id`, `network`, `subnetwork`, `node_service_account` (required; the default compute
 account is refused), and defaults for the cluster, zone, channel, ranges, maintenance window, labels, pool
-name, machine, disk, node counts and `spot`, and the security inputs below. Outputs: `cluster_name`, `location`, `dns_endpoint`.
+name, machine, disk, node counts and `spot`, and the security inputs below. For a regional cluster:
+`node_locations`, `location_policy` (`ANY` or `BALANCED`), `total_max_node_count` (replaces the per-zone
+maximum; `min_node_count` then is the total minimum) and `oauth_scopes`; defaults keep the zonal `apps` cluster. Outputs: `cluster_name`, `location`, `dns_endpoint`.
 
 ## Built to be imported
 

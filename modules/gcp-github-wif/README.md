@@ -31,6 +31,8 @@ modifier): write `${VAR}:environment`.
 Inputs: `project_id`, `project_number`, `github_repository`, `github_owner_id`, `github_repo_id`,
 `sub_claim_prefix` (all required), `environments`, `pool_id`, `pool_display_name`, `provider_id`,
 `provider_display_name`, `deployer_cluster_role`, `create_custom_connect_role`, `enable_previews`,
-`enable_drift`.
+`enable_drift`, `allowed_environment` (also pins `assertion.environment` in the main provider; default
+`null`), `deployer_account_ids` (service account ID per environment; default `gh-deployer-<env>`).
+The module serves one repository. For several, call it once per repository with its own `pool_id`.
 Outputs: `workload_identity_provider`, `deployer_emails`, `preview_workload_identity_provider`,
 `drift_workload_identity_providers`.

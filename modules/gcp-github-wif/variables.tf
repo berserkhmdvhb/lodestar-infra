@@ -59,6 +59,33 @@ variable "environments" {
   default     = ["dev", "qa", "production"]
 }
 
+variable "allowed_environment" {
+  type        = string
+  description = "When set, the main provider also admits only tokens of this GitHub environment (assertion.environment). null leaves the condition unchanged."
+  default     = null
+
+  validation {
+    condition     = var.allowed_environment == null ? true : can(regex("^[A-Za-z0-9._-]+$", var.allowed_environment))
+    error_message = "allowed_environment must be null or contain only letters, digits, dot, underscore and hyphen."
+  }
+}
+
+variable "deployer_account_ids" {
+  type        = map(string)
+  description = "Deployer service account ID per environment (6 to 30 characters). An environment not listed keeps gh-deployer-<environment>."
+  default     = {}
+
+  validation {
+    condition     = alltrue([for id in values(var.deployer_account_ids) : can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", id))])
+    error_message = "Each deployer account ID must be 6 to 30 characters: a lowercase letter, then lowercase letters, digits or hyphens, ending in a letter or digit."
+  }
+
+  validation {
+    condition     = alltrue([for e in keys(var.deployer_account_ids) : contains(var.environments, e)])
+    error_message = "deployer_account_ids may only name environments listed in var.environments."
+  }
+}
+
 variable "pool_id" {
   type        = string
   description = "ID of the workload identity pool."
