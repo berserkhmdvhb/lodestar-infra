@@ -115,10 +115,11 @@ tofu -chdir=bootstrap init -migrate-state
 Answer `yes` to copying the state to the new backend. Proof that the object in the bucket is encrypted:
 
 ```bash
-gcloud storage cat "gs://${BUCKET}/bootstrap/default.tfstate" --project "${PROJECT_ID}" | head -c 300
+gcloud storage cat "gs://${BUCKET}/bootstrap/default.tfstate" --project "${PROJECT_ID}" | grep -c encrypted_data
+gcloud storage cat "gs://${BUCKET}/bootstrap/default.tfstate" --project "${PROJECT_ID}" | grep -c '"resources"'
 ```
 
-It must show `encrypted_data` and no `resources`. If it shows plain JSON: keep the fallback, run
+The first count must be `1` or more and the second `0`: the object holds `encrypted_data` and no `resources`. If it shows plain JSON: keep the fallback, run
 `tofu -chdir=bootstrap apply` (expect `No changes`; it saves the state again with the new method), and
 check again.
 

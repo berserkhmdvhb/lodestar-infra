@@ -52,6 +52,7 @@ Other roots copy the final shape from `encryption.example.tf.txt`, with the key 
 ## 4. Verify
 
 ```bash
+source ~/gke-setup.env   # defines PROJECT_ID; or export it yourself
 BUCKET="$(tofu -chdir=bootstrap output -raw state_bucket)"
 gcloud storage buckets describe "gs://${BUCKET}" --project "${PROJECT_ID}" \
   --format='yaml(versioning,uniform_bucket_level_access,public_access_prevention,retention_policy)'

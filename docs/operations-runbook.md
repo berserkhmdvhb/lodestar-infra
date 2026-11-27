@@ -7,7 +7,8 @@ the idea behind it. The stages follow the order the platform was built in.
 It does not replace the step-by-step guides (the template's `wiki/gke-cluster-setup.md`,
 `wiki/platform-setup.md`, `wiki/github-repository-settings.md`) or this repository's
 [`import-runbook.md`](import-runbook.md) and [`hardening-runbook.md`](hardening-runbook.md). It collects the
-commands as they were really run, with the corrections found on the way. Where a guide command and the
+commands the owner ran or was told to run, with the corrections found on the way. A few items were added for
+completeness; each is marked "Added for completeness, not from the session". Where a guide command and the
 command that worked differ, this page gives the working one and says why.
 
 This page is public. It contains no real project ID, number, account, e-mail, ID or secret: every value is a
@@ -151,7 +152,7 @@ The CLI is installed from Google's package repository (see
 (two files in `/etc/apt/sources.list.d/` naming the same repository). Keep exactly one. Find them, then
 write the single correct line:
 
-🔍 List every file that names the repository.
+🔍 List every file that names the repository. (Added for completeness, not from the session.)
 
 ```bash
 grep -rl 'packages.cloud.google.com/apt' /etc/apt/sources.list /etc/apt/sources.list.d/
@@ -203,9 +204,11 @@ scripts/tools.sh install
 export PATH="${PWD}/.tools/bin:${PATH}"
 ```
 
-(`scripts/tools.sh install helm4 external-secrets-chart` installs only what section 8 needs.)
+(`scripts/tools.sh install helm4 external-secrets-chart` installs only what section 8 needs. Added for
+completeness, not from the session: the owner's own install command for `yq`, `helm` and `kubectl` is not in
+the record, so the no-argument form here is the documented one.)
 
-✏️ In this repository (OpenTofu, tflint, checkov, bats, shellcheck, gitleaks). Run from this repository's
+✏️ In this repository (OpenTofu, tflint, checkov, bats, shellcheck, gitleaks, actionlint, zizmor, pre-commit). Run from this repository's
 root. It needs `uv`, `curl`, `make` and `bash`.
 
 ```bash
@@ -357,50 +360,35 @@ gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}" \
   --format='yaml(displayName,amount.specifiedAmount,budgetFilter.projects,thresholdRules)'
 ```
 
-If none covers this project, create one. `${BUDGET_AMOUNT}` is for example `100.00EUR`.
+The owner's account already had a budget made in the console, and he kept it: the record shows only the
+`budgets list` command above, never a create or an update. Its live settings are the ones the OpenTofu module
+records: 20 EUR a month, scoped to this project, with alerts at 0.5, 0.9, 1.0 and 1.5 of *current* spend and no
+forecasted-spend rule.
 
-✏️ Create.
+If none covers your project, you can create one. Set the amount inside the block, and keep it equal to the
+module's `amount_units` and `currency_code` (`modules/gcp-budget`), or the next plan shows a change.
+Added for completeness, not from the session: `gcloud` documents `percent` as a fraction from 0.0 to 1.0, so a
+1.5 threshold (150 percent) was set in the console, and the `percent=1.5` line below is untested.
+
+✏️ Create (only if there is none).
 
 ```bash
 gcloud billing budgets create --billing-account="${BILLING_ACCOUNT}" \
   --display-name="${PROJECT_ID} monthly" \
-  --budget-amount="${BUDGET_AMOUNT}" \
+  --budget-amount=20.00EUR \
   --filter-projects="projects/${PROJECT_ID}" \
   --threshold-rule=percent=0.5 \
   --threshold-rule=percent=0.9 \
   --threshold-rule=percent=1.0 \
-  --threshold-rule=percent=1.5 \
-  --threshold-rule=percent=1.0,basis=forecasted-spend
-```
-
-If one already exists (the owner's did, made in the console), update it in place instead. Find its ID, which
-is the last part of its resource name, then replace its settings:
-
-✏️ Update.
-
-```bash
-BUDGET="$(gcloud billing budgets list --billing-account="${BILLING_ACCOUNT}" \
-  --filter='displayName="<existing budget display name>"' --format='value(name)' | awk -F/ '{print $NF}')"
-printf '%s\n' "${BUDGET}"
-
-gcloud billing budgets update "${BUDGET}" --billing-account="${BILLING_ACCOUNT}" \
-  --display-name="${PROJECT_ID} monthly" \
-  --budget-amount="${BUDGET_AMOUNT}" \
-  --filter-projects="projects/${PROJECT_ID}" \
-  --clear-threshold-rules \
-  --add-threshold-rule=percent=0.5 \
-  --add-threshold-rule=percent=0.9 \
-  --add-threshold-rule=percent=1.0 \
-  --add-threshold-rule=percent=1.5 \
-  --add-threshold-rule=percent=1.0,basis=forecasted-spend
+  --threshold-rule=percent=1.5
 ```
 
 🔍 Check: rerun the `budgets list` command above.
 
-Expect: `projects/<number>` in the filter; thresholds 0.5, 0.9, 1.0 and 1.5 of current spend, and 1.0 of
-forecasted spend. Why `--clear-threshold-rules` first: `update` adds rules; without it the old rules stay.
+Expect: `projects/<number>` in the filter; thresholds 0.5, 0.9, 1.0 and 1.5, all of current spend.
 
-Now managed by OpenTofu in `envs/apps` (module `gcp-budget`, imported): do not change by hand.
+Now managed by OpenTofu in `envs/apps` (module `gcp-budget`, imported). Do not change by hand; change the
+code, not the budget, and plan.
 
 ### 2.5 Application Default Credentials (ADC) and the quota project
 
@@ -611,7 +599,7 @@ What each flag is for:
 | `--logging`, `--monitoring`, `--enable-managed-prometheus` | system and workload logs, system metrics, Google Managed Prometheus. |
 | `--maintenance-window-*` | upgrades only on Saturday and Sunday 00:00 to 08:00 UTC. GKE needs at least 48 hours of maintenance time in any 32 days, in blocks of 4 hours or more; two 8-hour days a week give 64. A shorter window fails with `Maintenance policy would go longer than 32d without 48h maintenance availability`. |
 | `--labels`, `--enable-cost-allocation` | a label for cost reports, and GKE cost allocation. |
-| `--spot` | **spot nodes**: about 60 to 70 percent cheaper, but Google can reclaim a node at any time. Right for dev and qa, not for production on its own. |
+| `--spot` | **spot nodes**: about 60 to 91 percent cheaper, but Google can reclaim a node at any time. Right for dev and qa, not for production on its own. |
 
 If the command asks for `--master-ipv4-cidr`, your gcloud still uses the older private-cluster model: add
 `--master-ipv4-cidr=172.16.0.32/28` and run it again. A quota error (`CPUS`, `IN_USE_ADDRESSES`,
@@ -632,7 +620,7 @@ Expect: `status: RUNNING`; `channel: STABLE`; `workloadPool: <project>.svc.id.go
 `spot: true`; `autoscaling.enabled: true`; a `dnsEndpointConfig` with an `endpoint:` host name and
 `allowExternalTraffic: true`.
 
-Settings fixed at creation: name, location type, network and ranges, VPC-native, Dataplane V2, private nodes.
+Settings that cannot be changed on a live cluster: name, location type, network and ranges, VPC-native, Dataplane V2.
 Changeable later: release channel, labels, autoscaling, machine type (through a new pool).
 
 Now managed by OpenTofu in `envs/apps` (module `gcp-gke`, imported). Do not change by hand; change the code
@@ -706,10 +694,12 @@ echo "exit=$?"
 
 Expect: the `wget` times out and `exit=` is not `0`.
 
-**Pitfall: `bad port '8080;'`.** The guide put `; echo "exit=$?"` on the same line as the `wget`. When the
-semicolon reached `wget` as part of the URL (a stray backslash from the paste, or a terminal that escaped it),
-the probe failed at once with `bad port '8080;'`, which looks like a blocked connection but is a malformed
-URL. Keep `echo "exit=$?"` on its own line, as above. The result of probe B is only valid if the failure
+**Pitfall: `bad port '8080;'`.** The guide put `; echo "exit=$?"` on the same line as the `wget`. The `;`
+reached `wget` as part of the URL, and the probe failed at once with `bad port '8080;'`, which looks like a
+blocked connection but is a malformed URL. The likeliest cause (added for completeness, not from the session:
+the record shows only the corrected command) is zsh's `url-quote-magic` (a default of oh-my-zsh), which
+backslash-escapes characters such as `;` after something that looks like a URL when you paste. A stray
+backslash from another paste route gives the same result. Keep `echo "exit=$?"` on its own line, as above. The result of probe B is only valid if the failure
 is a timeout, not that message.
 
 ✏️ Clean up.
@@ -763,7 +753,8 @@ first.
 
 ### 6.2 The immutable OIDC subject prefix
 
-GitHub repositories created after 2026-07-15 use **immutable subjects** by default. The token's `sub` claim is
+GitHub repositories created after 2026-07-15 use **immutable subjects** by default, and so do repositories
+**renamed or transferred** after that date ([GitHub changelog, 2026-04-23](https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens)). The prefix contains the names, so a rename changes it: read it again and rebind. The token's `sub` claim is
 then `repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:<env>`, not `repo:<owner>/<repo>:environment:<env>`.
 A binding written in the old form never matches a new repository, and every login fails with
 `iam.serviceAccounts.getAccessToken denied` (see the troubleshooting index). Derive the prefix from the API
@@ -919,13 +910,28 @@ for env in dev qa production; do
 done
 ```
 
-Expect, once correct: each line ends with `/subject/<SUB_PREFIX>:environment:<env>` for its own `<env>`, and has no other
-member. If a line shows the classic `.../subject/repo:<owner>/<repo>:environment:<env>` or the mangled
-`.../subject/repo:nvironment:<env>`, add the right one and remove the wrong one. The member strings below are
-built with braces and `printf '%s\n'` shows the value for you to check first.
+Expect, once correct: each line ends with `/subject/<SUB_PREFIX>:environment:<env>` for its own `<env>`, and has
+no other member. Three wrong members can show up:
 
-✏️ Add the correct binding and remove a wrong one. A `remove` fails with "not found" for a member that is not
-there; remove only what the list above showed.
+- the classic `.../subject/repo:<owner>/<repo>:environment:<env>` (right for an old repository, wrong for one with
+  immutable subjects);
+- the zsh-mangled `.../subject/repo:nvironment:<env>` (the guide's command run in zsh);
+- the second mangled form `.../subject/nvironment:<env>` (a repair run in zsh without braces).
+
+How it went on 2026-11-27, which explains the two mangled forms. The guide's command, run in zsh, created
+`.../subject/repo:nvironment:<env>`. The first repair, still unbraced, added `${POOL}/${SUB_PREFIX}:environment:${env}`;
+since `${SUB_PREFIX}:e` is empty here (there is no dot), zsh turned it into `.../subject/nvironment:<env>`.
+That repair's remove used `repo:$GH_REPO:environment:$env`, which expands to `repo:nvironment:<env>`, so it did
+remove the first mangled member (it matched only because it expanded the same way). The second repair used
+braces, added the correct member and removed `${POOL}/nvironment:${env}`, the member the first repair had added.
+After that, each deployer showed exactly one member: its own environment's immutable subject. The live setup is
+clean.
+
+Add the correct member, then remove each wrong member the listing showed, one line per form. A `remove` fails
+with "not found" for a member that is not there, so run a remove line only if the listing shows that member.
+`printf '%s\n'` shows the prefix for you to check first.
+
+✏️ Add the correct binding.
 
 ```bash
 source ~/gke-setup.env
@@ -936,14 +942,25 @@ for env in dev qa production; do
   sa="gh-deployer-${env}@${PROJECT_ID}.iam.gserviceaccount.com"
   gcloud iam service-accounts add-iam-policy-binding "${sa}" --role=roles/iam.workloadIdentityUser \
     --member="${POOL}/${SUB_PREFIX}:environment:${env}" --format=none
-  # the mangled zsh form; use ${POOL}/repo:${GH_REPO}:environment:${env} for the classic form instead
-  gcloud iam service-accounts remove-iam-policy-binding "${sa}" --role=roles/iam.workloadIdentityUser \
-    --member="${POOL}/repo:nvironment:${env}" --format=none
 done
 ```
 
-The first attempt at this fix still used unbraced variables and the removal member lost its start
-(`${POOL}/nvironment:...`), so the remove did not match. The braced form above is the corrected one.
+✏️ Remove a wrong member (one block per form shown by the listing, for the environment `env` that has it). For
+the classic form use `${POOL}/repo:${GH_REPO}:environment:${env}` as the member.
+
+```bash
+sa="gh-deployer-${env}@${PROJECT_ID}.iam.gserviceaccount.com"
+gcloud iam service-accounts remove-iam-policy-binding "${sa}" \
+  --role=roles/iam.workloadIdentityUser --member="${POOL}/repo:nvironment:${env}" --format=none
+gcloud iam service-accounts remove-iam-policy-binding "${sa}" \
+  --role=roles/iam.workloadIdentityUser --member="${POOL}/nvironment:${env}" --format=none
+```
+
+The first command removes the first mangled form and the second removes the second; run only the one the
+listing showed. Set `env` to `dev`, `qa` or `production` first, or put the block in the
+`for env in dev qa production` loop. After section 11 these bindings are managed by OpenTofu (module
+`gcp-github-wif`, from `sub_claim_prefix`): do not repair them by hand. Fix the value, review a plan and apply
+it. A hand fix would show as drift.
 
 Then rerun the failed workflow runs (the run IDs are on the run pages):
 
@@ -974,11 +991,11 @@ rendered with a longer name, hit this, deleted the empty namespaces and re-rende
 
 ### 7.1 Render the bootstrap for each environment
 
-✏️ (writes files in `~/platform-config`)
+✏️ (writes files in `~/platform-config`). The `PATH` line puts the repository's pinned helm, yq and kubectl first.
 
 ```bash
 source ~/gke-setup.env
-export PATH="${PWD}/.tools/bin:${PATH}"          # the repository's pinned helm, yq and kubectl
+export PATH="${PWD}/.tools/bin:${PATH}"
 export SERVICE_NAME="your-service-name"
 mkdir -p ~/platform-config && chmod 700 ~/platform-config
 
@@ -1096,7 +1113,7 @@ OpenTofu: the Helm release is installed by hand.
 
 ### 8.2 The Secret Manager API and one conditional grant per namespace
 
-✏️ Enable the API and write the grants. The principal names a *namespace and service account* in the
+✏️ Enable the API and write the grants. `grant` takes the namespace and the secret-name prefix it may read. The principal names a *namespace and service account* in the
 project's one Workload Identity pool (`<PROJECT_ID>.svc.id.goog`), which every cluster in the project shares.
 
 ```bash
@@ -1106,7 +1123,7 @@ printf 'export SERVICE_NAME="%s"\n' "${SERVICE_NAME}" >> ~/gke-setup.env
 gcloud services enable secretmanager.googleapis.com
 
 pool="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${PROJECT_ID}.svc.id.goog"
-grant() {   # grant <namespace> <secret-name prefix>
+grant() {
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" --role=roles/secretmanager.secretAccessor \
     --member="principal://iam.googleapis.com/${pool}/subject/ns/${1}/sa/external-secrets" \
     --condition="expression=resource.name.startsWith(\"projects/${PROJECT_NUMBER}/secrets/${2}\"),title=eso-${1}" \
@@ -1116,7 +1133,8 @@ for env in dev qa production; do grant "${SERVICE_NAME}-${env}" "${SERVICE_NAME}
 for env in dev qa; do grant "${SERVICE_NAME}-${env}-db" "${SERVICE_NAME}-${env}-db-password"; done
 ```
 
-Expect: no output (`--format=none`). The app namespaces read `<service>-<env>-*`; the database namespaces (dev
+Expect: no JSON output (`--format=none`), though gcloud still prints `Updated IAM policy for project [...]` to
+stderr for each grant. The app namespaces read `<service>-<env>-*`; the database namespaces (dev
 and qa) read only `<service>-<env>-db-password`. Because the grant names a namespace, a namespace of the same
 name in another cluster of the same project gets the same access: keep to one cluster per project for this
 design.
@@ -1171,13 +1189,13 @@ history or on the screen. Passwords are generated with `openssl rand -hex 24` (U
 a database URL). The dev and qa database user name is not secret: it is the chart's `postgresql.auth.user`
 (`app` unless you changed it).
 
-✏️ 🔐 Creates seven secrets.
+✏️ 🔐 Creates seven secrets. `mk` takes the secret name as its argument and reads the value from standard input; it never shows it.
 
 ```bash
-cd ~/path/to/the/template/repository     # your clone
+cd ~/path/to/the/template/repository
 source ~/gke-setup.env
 
-mk() {   # mk <secret name>; the value comes on stdin and is never shown
+mk() {
   gcloud secrets create "${1}" --replication-policy=user-managed \
     --locations="${REGION}" --data-file=- --format=none
 }
@@ -1209,10 +1227,10 @@ One `ExternalSecret` in the dev namespace reads a dev secret; another asks for a
 exists (`production-stats-pass`; the guide's `production-db-user` does not exist yet, which would not prove a
 permission denial).
 
-✏️ Creates two `ExternalSecret`s, then deletes them.
+✏️ Creates two `ExternalSecret`s, then deletes them. `probe` takes the name and the remote key as arguments.
 
 ```bash
-probe() {   # probe <name> <remote key>
+probe() {
 kubectl -n "${SERVICE_NAME}-dev" apply -f - <<EOF
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -1262,7 +1280,7 @@ The settings script sets repository and environment variables from a file kept *
 (it refuses a path under the repo root). The guide's table (`wiki/platform-setup.md`, Variables and
 secrets) is the single list of names.
 
-✏️ 🔐 (the file holds identifiers, not secrets; mode `600`). `RELEASE_APP_ID` is a placeholder until 9.3.
+✏️ (writes a file of identifiers, not secrets, in the private folder; mode `600`). `RELEASE_APP_ID` is a placeholder until 9.3.
 
 ```bash
 source ~/gke-setup.env
@@ -1294,7 +1312,7 @@ carry names and IDs, never a secret.
 
 ### 9.2 Dry run
 
-🔍 Prints (and with `--diff` also reads, so it says create versus update) every call it would make. Changes
+🔍 ✏️ (writes the dry-run output to a local file) Prints (and with `--diff` also reads, so it says create versus update) every call it would make. Changes
 nothing. `--template` is only for the upstream template repository (it marks the repository as a template);
 leave it out for an adopter's copy.
 
@@ -1351,30 +1369,32 @@ both `active`; five repository variables; two variables in each deploy environme
 
 ### 9.5 The App's private key 🔐
 
-Generate it on the App's page, in the **Private keys** (**Credentials → Key pairs**) section: choose
+Generate it on the App's page, in the **Private keys** section (**Credentials → Key pairs**; that location
+wording is added for completeness, not from the session): choose
 **Generate a private key**. The browser downloads a `.pem` file. The script never sets secrets; store it
 yourself, reading from the file so it never appears on screen, and then delete the local copy (a new key can be
 generated any time).
 
-✏️ 🔐
+✏️ 🔐 The `rm` runs only if the upload succeeded (`&&`), so a failed upload keeps the key and you can retry.
 
 ```bash
 ls ~/Downloads/*.pem
-gh secret set RELEASE_APP_PRIVATE_KEY --env release --repo "${GH_REPO}" < ~/Downloads/<the-file>.pem
-rm ~/Downloads/<the-file>.pem
+gh secret set RELEASE_APP_PRIVATE_KEY --env release --repo "${GH_REPO}" < ~/Downloads/<the-file>.private-key.pem \
+  && rm -f ~/Downloads/<the-file>.private-key.pem
 gh secret list --env release --repo "${GH_REPO}"
 ```
 
-Expect: the `ls` shows exactly the file you mean; the secret list then shows `RELEASE_APP_PRIVATE_KEY`
-with an update time. **Pitfalls hit here:**
+Expect: the `ls` shows exactly the file you mean (the real file ended in `.private-key.pem`); the secret list
+then shows `RELEASE_APP_PRIVATE_KEY` with an update time. If `gh secret set` fails, the file is still there:
+fix the cause below and run it again. **Pitfalls hit here:**
 
 - `<the-file>` is a placeholder. Typing it literally, or leaving it, gives "No such file". Replace it with the
   real name printed by `ls`.
-- `ls` says "No such file" (the key was never generated, was saved elsewhere, or has another extension than
-  the `.private-key.pem` the first attempt assumed). Search with `ls ~/Downloads/*.pem` and look in the browser's
-  download list. Generate a key if there is none.
-- A shell glob in a redirect (`< ~/Downloads/name.*.pem`) fails when it matches nothing or more than one file.
-  Use the full exact name.
+- `ls` says "No such file" (the key was never generated, or was saved elsewhere). Search with
+  `ls ~/Downloads/*.pem` and look in the browser's download list. Generate a key if there is none.
+- A shell glob in a redirect (`< ~/Downloads/name.*.pem`): in bash it fails when it matches nothing or more than
+  one file ("ambiguous redirect"); in zsh (with `MULTIOS`, the default) a glob that matches two files
+  concatenates both into the input, so you could upload two keys joined together. Use the full exact name.
 - `gh secret set` reports "Not Found" when `GH_REPO` does not name the real repository (a hyphen versus an
   underscore). `printf '%s\n' "${GH_REPO}"` first; the owner's env file had the template default, and the
   repository name had to be corrected there (and the command given the explicit repository once).
@@ -1477,6 +1497,7 @@ tofu version
 source ~/gke-setup.env
 printf 'project=%s region=%s zone=%s\n' "${PROJECT_ID}" "${REGION}" "${ZONE}"
 
+grep -c '^name:' ~/platform-config/live/budget.yaml
 BUDGET_NAME="$(sed -n 's/^name: //p' ~/platform-config/live/budget.yaml)"
 BILLING_ACCOUNT="$(printf '%s' "${BUDGET_NAME}" | cut -d/ -f2)"
 BUDGET_ID="$(printf '%s' "${BUDGET_NAME}" | cut -d/ -f4)"
@@ -1489,9 +1510,10 @@ state_bucket_name = "${PROJECT_ID}-tofu-state"
 EOF
 ```
 
-Expect: all three budget values print non-empty (`name` has the form
+Expect: `1` from the `grep -c` (the parsing below assumes exactly one budget on the billing account; with
+more, trim the export to the right one first), then all three budget values print non-empty (`name` has the form
 `billingAccounts/<account>/budgets/<id>`). The bucket name must be globally unique; if the apply later says it
-is taken, choose another and apply again. Never commit a `*.tfvars` file.
+is taken, choose another in `bootstrap/terraform.tfvars`, plan again and apply the new plan. Never commit a `*.tfvars` file.
 
 ### 11.2 Plan and apply the bootstrap (local state)
 
@@ -1515,8 +1537,8 @@ rm -f bootstrap/bootstrap.tfplan
 
 Pitfall: the plan file is in `bootstrap/`. `tofu apply "bootstrap.tfplan"` from the repository root, without
 `-chdir=bootstrap`, fails to find it. A second apply of a deleted plan file also fails; plan again. If the
-apply reports `SERVICE_DISABLED` for Cloud KMS right after the API was enabled, wait a minute and apply
-again. The key ring, key and bucket have `prevent_destroy`: key rings can never be deleted in Cloud KMS.
+apply reports `SERVICE_DISABLED` for Cloud KMS right after the API was enabled, wait a minute, plan
+again into a new file and apply that file: the saved plan was deleted, and is stale after a partial apply. The key ring, key and bucket have `prevent_destroy`: key rings can never be deleted in Cloud KMS.
 
 ### 11.3 Migrate the bootstrap's own state into the bucket, encrypted
 
@@ -1664,13 +1686,18 @@ tofu -chdir=envs/apps plan -out=import.tfplan
 
 Expect: `No changes` for the bootstrap plan; `0` from the `grep` (no empty value); nothing from `git status`
 (the tfvars file is ignored); then a plan ending in
-`Plan: 41 to import, 0 to add, N to change, 0 to destroy.`
+`Plan: 41 to import, 0 to add, N to change, 0 to destroy.` with at most 10 in-place updates. The owner's
+actual run said `41 to import, 0 to add, 1 to change, 0 to destroy`: only the cluster's state-only labels
+changed, and the APIs showed no change.
 
 **Pitfall: Service Usage 403.** If the plan ends in errors with
 `403 ... serviceusage.googleapis.com ... SERVICE_DISABLED`, the Service Usage API is not enabled in the
-project. The provider uses it for every API call (`user_project_override`). The owner's first plan failed this
-way: the bootstrap had not yet been given `serviceusage.googleapis.com`. A plan that ends in errors must never
-be applied: delete it, add the API through the bootstrap root, and plan again:
+project (or has not propagated yet). The root bills its requests to the project (`user_project_override`),
+so the nine `google_project_service` reads fail without it. The current bootstrap already enables it (it is
+among the 6 additions of 11.2), so today this means the bootstrap apply was skipped or has not propagated: wait
+2 to 3 minutes. The owner's first plan failed this way because his bootstrap had been applied *before* that API
+was added to it. A plan that ends in errors must never be applied: delete it. Only for a bootstrap applied
+before the fix, add the API through the bootstrap root and plan again:
 
 ✏️
 
@@ -1680,7 +1707,8 @@ tofu -chdir=bootstrap plan -out=bootstrap.tfplan
 tofu -chdir=bootstrap show -no-color bootstrap.tfplan | grep -E '# .* will be|^Plan:'
 ```
 
-Expect: exactly one addition, `google_project_service.apis["serviceusage.googleapis.com"]`, `Plan: 1 to add`.
+Expect (for that older bootstrap only): exactly one addition,
+`google_project_service.apis["serviceusage.googleapis.com"]`, `Plan: 1 to add`.
 Apply that saved plan, delete it, and wait for the API to propagate before planning `envs/apps` again:
 
 ✏️
@@ -1698,7 +1726,8 @@ visible, plan again into a new file.
 
 ### 11.5 Two mechanical checks on the saved plan
 
-🔍 Both must pass before any apply. The first must match only the summary line.
+✏️ (writes a saved plan file locally; nothing in the cloud) 🔍 Both checks must pass before any apply. The
+first must match only the summary line.
 
 ```bash
 tofu -chdir=envs/apps plan -out=import.tfplan
@@ -1709,11 +1738,12 @@ tofu -chdir=envs/apps show -no-color import.tfplan | grep -nE '^ *[-+~] |will be
 Expect, check 1: one line only, the summary `... 0 to destroy.` A line saying `must be replaced`, `-/+`
 or `will be destroyed` is a **hard stop**: do not apply; paste the plan to someone who can read it.
 
-Expect, check 2, and nothing else: the legend line `~ update in-place`; 10 `will be updated in-place`
-headers (9 `google_project_service` and 1 `google_container_cluster`); under each API a
+Expect, check 2, and nothing else: the legend line `~ update in-place`; at most 10 `will be updated in-place`
+headers (9 `google_project_service` and 1 `google_container_cluster`); under each API that appears a
 `~ disable_dependent_services` and a `~ disable_on_destroy` line; under the cluster a
 `~ resource_labels = {` and a `~ terraform_labels = {` line, each followed by `+ "cluster" = "apps"`. These
-are provider-side or state-only fields; applying them does not change Google Cloud.
+are provider-side or state-only fields; applying them does not change Google Cloud. In the owner's run only the
+cluster line appeared (`1 to change`) and the APIs showed no change.
 
 The summary also lists what is imported: 9 APIs, 4 network, 2 node service account, 11 Workload Identity, 5
 conditional secret accessors, 7 secrets, 1 budget, 2 cluster and pool: 41 in all. Any other changed
@@ -1728,7 +1758,7 @@ tofu -chdir=envs/apps apply import.tfplan
 tofu -chdir=envs/apps plan
 ```
 
-Expect: `Apply complete! Resources: 41 imported, 0 added, N changed, 0 destroyed.` and then
+Expect: `Apply complete! Resources: 41 imported, 0 added, N changed, 0 destroyed.` (N was 1 in the owner's run) and then
 `No changes. Your infrastructure matches the configuration.` Anything else: stop.
 
 ✏️ Delete the plan file.
@@ -1787,7 +1817,7 @@ done
 The outputs (`GCP_PROJECT_ID`, `GKE_CLUSTER`, `GKE_LOCATION`, `GCP_WIF_PROVIDER`, `GCP_DEPLOYER_SA`,
 `dns_endpoint`) are the GitHub variables of 9.1; read them with `tofu -chdir=envs/apps output`.
 
-**From here on, the resources of sections 2 to 6 and 8.2 are managed by OpenTofu in `envs/apps`: change the
+**From here on, the resources of sections 2 to 6, 8.2 and the secret containers of 8.4 are managed by OpenTofu in `envs/apps`: change the
 code and plan; do not change them by hand.** A manual change shows up as drift in the next `plan`.
 
 ---
@@ -1796,7 +1826,7 @@ code and plan; do not change them by hand.** A manual change shows up as drift i
 
 Run from: this repository's root, in the terminal of section 11 (or re-source the env file and set the `PATH`).
 Goal: the first change to live resources after the import, all in place: Secrets encrypted with a Cloud KMS
-key, RBAC bindings to anonymous groups refused, VPC flow logs, and Data Access audit logs for the container
+key, new RBAC bindings to the all-users groups (`system:authenticated`, `system:unauthenticated`) refused, VPC flow logs, and Data Access audit logs for the container
 API. The detail and the acceptance rules are in [`hardening-runbook.md`](hardening-runbook.md); this is the
 command sequence as it was run.
 
@@ -1900,7 +1930,8 @@ git log --oneline origin/main..HEAD
 
 Expect: `make check` ends without an error (fmt, validate, tflint, checkov, `tofu test`, bats, shellcheck,
 gitleaks, actionlint, zizmor); `make secrets` runs gitleaks over the history and reports `no leaks found`.
-Then scan the *added lines* for anything identifying (this repository and its docs are public):
+Then scan the *added lines* for anything identifying (this repository and its docs are public). Added for
+completeness, not from the session:
 
 🔍
 
@@ -2000,16 +2031,16 @@ private vulnerability reporting are on. A failure prints GitHub's error body and
 | a deploy with the in-cluster database is refused: CronJob name too long (over 52 characters) | the chart's `<fullname>-pg-backup-verify` has no length guard (open template bug); a long release name makes the fullname long | use a shorter `SERVICE_NAME`; if namespaces already exist, delete the empty ones and re-render (7.5) |
 | `github-settings.sh --apply` stops with `HTTP 422 ... Actor ... integration must be part of the ruleset source` | the release GitHub App is not installed on the repository, so the `release-tags` ruleset cannot name it | install the App on the repository, then rerun `--apply` (9.3); it updates in place |
 | `ls ~/Downloads/*.pem` or `gh secret set ... < file`: "No such file" / not found | the key was not generated, is in another folder, a placeholder `<the-file>` was typed literally, a glob matched nothing or several files, or `GH_REPO` names the wrong repository | generate a key on the App's page (Credentials, Key pairs); list `ls ~/Downloads/*.pem`; use the exact name; check `printf '%s\n' "${GH_REPO}"` (9.5) |
-| deploy-ops `check` fails: `Permission 'iam.serviceAccounts.getAccessToken' denied` | **cause 1:** the `workloadIdentityUser` member uses the classic subject (`repo:<owner>/<repo>:environment:<env>`), but the repository has immutable subjects | derive `SUB_PREFIX` from the API and rebind (6.2, 6.7) |
-| | **cause 2:** zsh turned `$GH_REPO:environment:$env` into `repo:nvironment:<env>`, a member that matches nothing | brace every variable before a colon, rebind and remove the bad member (6.7) |
+| deploy-ops `check` fails: `Permission 'iam.serviceAccounts.getAccessToken' denied` | **cause 1:** the `workloadIdentityUser` member uses the classic subject (`repo:<owner>/<repo>:environment:<env>`), but the repository has immutable subjects | derive `SUB_PREFIX` from the API and rebind (6.2, 6.7); once section 11 is done these bindings are managed by OpenTofu (`gcp-github-wif`, `sub_claim_prefix`), so fix the value and apply a reviewed plan, never by hand |
+| | **cause 2:** zsh turned `$GH_REPO:environment:$env` into `repo:nvironment:<env>` (and an unbraced repair into `nvironment:<env>`), members that match nothing | brace every variable before a colon, rebind and remove the bad members (6.7); after section 11, through the code and a plan |
 | | **cause 3:** the binding is right but has not propagated yet | wait up to about 7 minutes after the change and rerun (6.6) |
-| `gcloud` / `tofu` plan: `403 ... serviceusage.googleapis.com ... SERVICE_DISABLED` | the Service Usage API is not enabled in the project, and the provider needs it for every call | add it through the bootstrap root, apply, wait 2 to 3 minutes (11.4) |
+| `gcloud` / `tofu` plan: `403 ... serviceusage.googleapis.com ... SERVICE_DISABLED` | the Service Usage API is not enabled in the project, and the root bills requests to the project, so the `google_project_service` reads fail | the bootstrap apply was skipped or has not propagated: wait 2 to 3 minutes; only for an old bootstrap, add the API through it (11.4) |
 | `tofu apply <file>`: no such file / "Failed to load" a plan | the saved plan was already deleted (`rm -f` after use), or was run from the wrong directory (the file is in `bootstrap/` or `envs/apps/`) | plan again into a new file; use `tofu -chdir=<root> apply <file>` |
 | `Excess arguments.`, `command not found: <word>`, or an odd error after a paste | prose (a sentence, a heading, a `->` explanation) was copied into the shell together with the commands | copy only the code block; if a prose line ran, check its side effects before going on |
 | `unrecognized arguments` / flag unknown in `gcloud container clusters create` | an old gcloud | update gcloud and rerun 5.1 |
 | `Maintenance policy would go longer than 32d without 48h maintenance availability` | the maintenance window is too short | use the Saturday and Sunday 8-hour window of 5.2 |
 | `ImagePullBackOff` for a public image | no outbound route: NAT is missing or in another region | recheck section 3 |
-| a workflow login is refused: `The given credential is rejected by the attribute condition` | wrong owner ID, repository ID, repository name case, or a workflow file or ref the condition does not allow | compare with `providers describe`; fix with `providers update-oidc --attribute-condition=...` (6.3) |
+| a workflow login is refused: `The given credential is rejected by the attribute condition` | wrong owner ID, repository ID, repository name case, or a workflow file or ref the condition does not allow | compare with `providers describe`. Before section 11: `providers update-oidc --attribute-condition=...` (6.3). After it the provider is managed by OpenTofu (`gcp-github-wif`): change the code and apply a reviewed plan, not by hand |
 | `kubectl` hangs or times out | wrong kubeconfig, or the node pool is scaled to 0 | `source ~/gke-setup.env`; `kubectl config current-context`; check the node count |
 | `tofu` reports an authentication or quota-project error | the ADC login expired or has no quota project | repeat 2.5 |
 | zsh: `bad pattern` / `command not found: #` on a comment | interactive zsh does not ignore `#` comments by default | `setopt interactive_comments`, or paste without the comments |
@@ -2030,7 +2061,8 @@ private vulnerability reporting are on. A failure prints GitHub's error body and
   attribute condition; a service account lists, through `roles/iam.workloadIdentityUser`, which subjects may
   impersonate it.
 - **OIDC subject, classic vs immutable.** The token's `sub` claim. Classic: `repo:<owner>/<repo>:environment:<env>`
-  (names can be renamed or reused). Immutable, the default for repositories created after 2026-07-15:
+  (names can be renamed or reused). Immutable, the default for repositories created, renamed or transferred
+  after 2026-07-15:
   `repo:<owner>@<owner-id>/<repo>@<repo-id>:environment:<env>` (numeric IDs, safe against rename takeover). Read
   the prefix from `repos/<repo>/actions/oidc/customization/sub`.
 - **Workload Identity for GKE.** The in-cluster counterpart: a Pod's Kubernetes service account acts as a
@@ -2046,11 +2078,11 @@ private vulnerability reporting are on. A failure prints GitHub's error body and
 - **External Secrets Operator (ESO).** Syncs values from an external store (Secret Manager) into Kubernetes
   Secrets, per `ExternalSecret`, through a `SecretStore`.
 - **Conditional IAM.** A role binding with a condition expression (`resource.name.startsWith(...)`) so the
-  grant covers only matching resources. Each binding on the project needs its own title.
+  grant covers only matching resources. This design gives each binding its own title (`eso-<namespace>`) to tell them apart; IAM does not require titles to be unique.
 - **OpenTofu state.** The record of which real resource each code block owns. Stored remotely, versioned, and
   encrypted.
 - **State encryption (`gcp_kms` + `aes_gcm`, and the fallback).** OpenTofu encrypts state and plan files with
-  AES-GCM using a key derived from a Cloud KMS key. A `fallback` method lets the first migration read plain
+  AES-GCM with envelope encryption: a new data key for each file, wrapped by the Cloud KMS key. A `fallback` method lets the first migration read plain
   state; the final form has no fallback and `enforced = true`.
 - **Import blocks.** `import { to = ...; id = ... }` declarations that put an existing resource into state at
   the next apply, without changing it. They may stay in the code afterwards.
@@ -2058,11 +2090,12 @@ private vulnerability reporting are on. A failure prints GitHub's error body and
   or refuses if the state has moved on.
 - **Drift.** A difference between code, state and the real resource, caused by a manual change or a provider
   default. `tofu plan` shows it.
-- **`prevent_destroy` and `deletion_protection`.** Safeguards against deleting things that cannot be
-  recreated (the KMS key and ring, the state bucket) or are costly (the cluster). A plan that would destroy
-  them fails.
+- **`prevent_destroy` and `deletion_protection`.** `prevent_destroy` is an OpenTofu lifecycle rule: a plan that
+  would destroy the resource (the KMS key and ring, the state bucket) fails. `deletion_protection` is a
+  provider argument on the cluster, enforced by OpenTofu only: the plan shows the destroy and the apply
+  refuses it. `gcloud` or the console can still delete the cluster.
 - **Rulesets.** GitHub's rules for branches and tags (require pull requests and checks, block force pushes,
-  restrict who may create `v*` tags). They replace the older branch-protection settings.
+  restrict who may create `v*` tags). They sit alongside the older branch-protection settings and are the more flexible of the two.
 - **Conventional Commits.** The `type(scope): summary` format for commit messages and PR titles, enforced by a
   required check; the PR title becomes the squash commit message.
 
@@ -2093,7 +2126,7 @@ gcloud container node-pools update default-pool --cluster="${CLUSTER}" --locatio
 
 Expect: a few minutes after the pause `kubectl get nodes` prints `No resources found`; after the resume, 2
 nodes `Ready`. The node pool is now part of the OpenTofu cluster module: a pause changes its size and
-autoscaling, so the next `tofu plan` may show them as drift. Resume before you plan or apply.
+autoscaling, so the next `tofu plan` WILL show them as drift. Resume before you plan or apply.
 
 ### 16.2 Look up a domain's registrar
 

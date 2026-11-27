@@ -104,6 +104,7 @@ old plan file, wait a few minutes, plan again into a new file and review it with
 
 ```bash
 rm -f envs/apps/hardening.tfplan
+sleep 180
 tofu -chdir=envs/apps plan -out=hardening.tfplan
 ```
 
