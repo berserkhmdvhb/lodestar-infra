@@ -14,7 +14,7 @@ after reviewing the plan, runs the state-only import by hand: see [`docs/import-
 | `bootstrap/` | One-off root that creates the remote-state bucket |
 | `modules/` | Reusable modules, each with a `tofu test` file using mock providers |
 | `envs/apps/` | The root for the apps cluster, composed from the modules |
-| `docs/` | Plans, decisions, the import runbook and the hardening runbook |
+| `docs/` | Plans, decisions, the import runbook, the hardening runbook and the [operations runbook](docs/operations-runbook.md) of every manual step |
 | `tools/` | `pins.tsv` (pinned, checksum-verified toolchain) and hash-pinned Python requirements |
 | `scripts/` | `tools.sh` installer and its safe archive extractor; `github-settings.sh` (repository settings as code) |
 | `tests/` | Bats tests for the installer and the settings script |
