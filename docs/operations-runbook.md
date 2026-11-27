@@ -1286,6 +1286,8 @@ as drift. The value never goes through OpenTofu.
 3. Plan again. Expect `No changes.`
 4. Later, after creating the tunnel in Cloudflare, add the token without echoing it:
 
+`PROJECT_ID` comes from the env file: run `source ~/gke-setup.env` first.
+
 ```
 read -rs TOKEN
 printf '%s' "${TOKEN}" | gcloud secrets versions add cloudflared-tunnel-token --project "${PROJECT_ID}" --data-file=-

@@ -55,6 +55,28 @@ run "exactly_one_exact_conditional_member" {
   }
 }
 
+run "the_condition_does_not_admit_a_sibling_secret" {
+  command = plan
+
+  assert {
+    condition = (
+      startswith("projects/123456789012/secrets/cloudflared-tunnel-token/versions/1", trimsuffix(trimprefix(one(google_project_iam_member.this["cloudflared-tunnel-token"].condition).expression, "resource.name.startsWith(\""), "\")"))
+      && !startswith("projects/123456789012/secrets/cloudflared-tunnel-token-other/versions/1", trimsuffix(trimprefix(one(google_project_iam_member.this["cloudflared-tunnel-token"].condition).expression, "resource.name.startsWith(\""), "\")"))
+    )
+    error_message = "the prefix matches its own versions and not a sibling secret"
+  }
+}
+
+run "a_64_character_namespace_is_rejected" {
+  command = plan
+
+  variables {
+    secrets = { "x" = { namespace = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+  }
+
+  expect_failures = [var.secrets]
+}
+
 run "region_is_configurable" {
   command = plan
 
