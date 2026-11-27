@@ -169,7 +169,9 @@
   - partial-failure and rollback paths.
 - **Results:** `make check` green (checkov 71 passed, 0 failed).
 - **Review:** the opus review found two Important runbook and plan-visibility issues, fixed in one round; the re-review is clean.
-- **Owner apply:** pending (a quiet window).
+- **Owner apply (2026-11-27): done.**
+  - The plan matched exactly: 4 to add, 2 to change, 0 to destroy, `DECRYPTED -> ENCRYPTED` with the literal key, and both RBAC switches `true -> false`.
+  - After the apply, `tofu plan` reports **No changes**.
 
 ### Task L1.5: The `envs/apps` composition and the import (added 2026-11-27)
 **Files:**
