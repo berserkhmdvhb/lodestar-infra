@@ -169,7 +169,7 @@ reached `wget` as part of the URL, and the probe failed at once with `bad port '
 blocked connection but is a malformed URL. The likeliest cause (added for completeness, not from the session:
 the record shows only the corrected command) is zsh's `url-quote-magic` (a default of oh-my-zsh), which
 backslash-escapes characters such as `;` after something that looks like a URL when you paste. A stray
-backslash from another paste route gives the same result. Keep `echo "exit=$?"` on its own line, as above. The result of probe B is only valid if the failure
+backslash from another paste route gives the same result. Keep `printf 'exit=%s\n' "$?"` on its own line, as above. The result of probe B is only valid if the failure
 is a timeout, not that message.
 
 ✏️ Clean up.

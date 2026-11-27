@@ -77,7 +77,11 @@ oldblocks() {
   # Allowlist of old lines that were intentionally rewritten: the intro and the hardening and CI-identity pointers
   # (relative links gained ../), the production pointer (its "below" is gone and its link gained ../), and the
   # numbered Contents list (now the section map table).
+  # Also two lines that name the echo line of the 5.4 probe, which became a printf line (the second is a table row;
+  # the table test has its own substitution for it).
   allow=(
+    "| \`wget: bad port '8080;'\` in the NetworkPolicy probe | the \`;\` of \`...:8080; echo \"exit=\$?\"\` reached \`wget\` as part of the URL | put \`echo \"exit=\$?\"\` on its own line (5.4) |"
+    'backslash from another paste route gives the same result. Keep `echo "exit=$?"` on its own line, as above. The result of probe B is only valid if the failure'
     '[`import-runbook.md`](import-runbook.md), [`hardening-runbook.md`](hardening-runbook.md) and'
     '[`production-runbook.md`](production-runbook.md) (the separate production project and cluster). It collects the'
     'The production project and its regional cluster are built by [`production-runbook.md`](production-runbook.md),'
@@ -111,7 +115,8 @@ oldblocks() {
 }
 
 @test "every table row of the old file is in the new set" {
-  outside "$OLD" | grep -E '^\|' | LC_ALL=C sort > "$BATS_TEST_TMPDIR/old"
+  # One intended edit: the fix column of the bad-port row names the printf line that replaced the echo line.
+  outside "$OLD" | grep -E '^\|' | sed -e 's/put `echo "exit=\$?"` on its own line (5.4)/put `printf '"'"'exit=%s\\n'"'"' "$?"` on its own line (5.4)/' | LC_ALL=C sort > "$BATS_TEST_TMPDIR/old"
   outside "${NEW[@]}" | grep -E '^\|' | LC_ALL=C sort > "$BATS_TEST_TMPDIR/new"
   [ "$(wc -l < "$BATS_TEST_TMPDIR/old")" -gt 50 ]
   run env LC_ALL=C comm -23 "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new"

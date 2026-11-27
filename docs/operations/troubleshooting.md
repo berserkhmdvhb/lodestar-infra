@@ -8,7 +8,7 @@ Part of the [operations runbook](README.md). Section numbers are the runbook's o
 | --- | --- | --- |
 | `apt update` warns the Google Cloud SDK source is configured multiple times | two files in `/etc/apt/sources.list.d/` name the same repository | keep one file; see 1.1 |
 | `gh auth login` ends with no token, or waits forever | the device flow was not completed: the one-time code must be entered in the browser at the printed URL, before it expires | rerun `gh auth login`; open the URL, type the code, approve; check with `gh auth status` |
-| `wget: bad port '8080;'` in the NetworkPolicy probe | the `;` of `...:8080; echo "exit=$?"` reached `wget` as part of the URL | put `echo "exit=$?"` on its own line (5.4) |
+| `wget: bad port '8080;'` in the NetworkPolicy probe | the `;` of `...:8080; echo "exit=$?"` reached `wget` as part of the URL | put `printf 'exit=%s\n' "$?"` on its own line (5.4) |
 | `kubectl apply --dry-run=server` says `NotFound` | the dry run creates nothing, so the namespaces do not exist | apply only the `Namespace` documents first with `yq` (7.2) |
 | a deploy with the in-cluster database is refused: CronJob name too long (over 52 characters) | the chart's `<fullname>-pg-backup-verify` has no length guard (open template bug); a long release name makes the fullname long | use a shorter `SERVICE_NAME`; if namespaces already exist, delete the empty ones and re-render (7.5) |
 | `github-settings.sh --apply` stops with `HTTP 422 ... Actor ... integration must be part of the ruleset source` | the release GitHub App is not installed on the repository, so the `release-tags` ruleset cannot name it | install the App on the repository, then rerun `--apply` (9.3); it updates in place |
