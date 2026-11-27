@@ -118,6 +118,20 @@ run "exact_role_sets_and_scopes" {
   }
 }
 
+run "cloud_billing_api_is_enabled_and_kept" {
+  command = plan
+
+  assert {
+    condition = (
+      google_project_service.cloudbilling.service == "cloudbilling.googleapis.com"
+      && google_project_service.cloudbilling.project == "your-project-id"
+      && google_project_service.cloudbilling.disable_on_destroy == false
+      && google_project_service.cloudbilling.disable_dependent_services == false
+    )
+    error_message = "the Cloud Billing API is enabled in the project and left on at destroy"
+  }
+}
+
 run "no_forbidden_roles_anywhere" {
   command = plan
 

@@ -37,6 +37,7 @@ to the job summary.
 
 ```bash
 source ~/gke-setup.env
+unset GH_REPO
 export LODESTAR_REPO="${GH_OWNER}/lodestar-infra"
 export LODESTAR_REPO_ID="$(gh api "repos/${LODESTAR_REPO}" --jq .id)"
 printf '%s\n' "${LODESTAR_REPO_ID}"
@@ -82,6 +83,15 @@ printf 'ci_sub_claim_prefix  = "%s"\n' "${LODESTAR_SUB_PREFIX}" >> envs/apps/ter
 
 ## 3. Plan
 
+First check whether the Cloud Billing API is on in the project:
+
+```bash
+gcloud services list --enabled --project "${PROJECT_ID}" --filter='config.name=cloudbilling.googleapis.com' --format='value(config.name)'
+```
+
+Empty output is expected: the plan's `cloudbilling` resource enables it. If the name is printed, the API is already on;
+that is fine, because enabling an enabled API succeeds, so the apply is idempotent.
+
 ```bash
 git pull
 tofu -chdir=envs/apps init
@@ -93,10 +103,10 @@ tofu -chdir=envs/apps plan -out=ci-identity.tfplan
 The `Plan:` line must read (with `-out`, the notes on outputs and the saved plan follow it):
 
 ```text
-Plan: 11 to add, 0 to change, 0 to destroy.
+Plan: 12 to add, 0 to change, 0 to destroy.
 ```
 
-The 11 adds, and nothing else:
+The 12 adds, and nothing else:
 
 - `module.ci_planner.google_iam_workload_identity_pool.ci`
 - `module.ci_planner.google_iam_workload_identity_pool_provider.ci`
@@ -105,6 +115,7 @@ The 11 adds, and nothing else:
 - 3 x `module.ci_planner.google_project_iam_member.planner[...]` (`roles/viewer`, `roles/iam.securityReviewer`, `roles/serviceusage.serviceUsageConsumer`)
 - `module.ci_planner.google_storage_bucket_iam_member.state`
 - `module.ci_planner.google_kms_crypto_key_iam_member.state`
+- `module.ci_planner.google_project_service.cloudbilling`
 - `module.ci_planner.google_billing_account_iam_member.viewer`
 
 Two mechanical checks:
@@ -119,11 +130,11 @@ Only the summary line (`... 0 to change, 0 to destroy.`) may match.
 tofu -chdir=envs/apps show -no-color ci-identity.tfplan | grep -E '^  # .* will be ' | sort
 ```
 
-Expect exactly 11 lines, all `will be created`, all starting with `module.ci_planner.`, matching the list above.
+Expect exactly 12 lines, all `will be created`, all starting with `module.ci_planner.`, matching the list above.
 
 ### HARD STOP
 
-> If the summary says anything but `11 to add, 0 to change, 0 to destroy`, if any other address appears, if
+> If the summary says anything but `12 to add, 0 to change, 0 to destroy`, if any other address appears, if
 > any line says `must be replaced` or `will be destroyed`, or if one of the three role lists differs: DO NOT
 > APPLY. Delete the plan file (`rm -f envs/apps/ci-identity.tfplan`), stop and paste the plan.
 
@@ -136,6 +147,18 @@ tofu -chdir=envs/apps plan
 ```
 
 The last command must print `No changes. Your infrastructure matches the configuration.`
+
+If the apply fails on the billing member with `SERVICE_DISABLED` / "has not been used in project" right after the API was
+enabled, the enablement has not propagated yet. Delete the plan file, wait, plan again into a new file (expect
+`Plan: 1 to add, 0 to change, 0 to destroy.`, only the billing member) and apply that file:
+
+```bash
+rm -f envs/apps/ci-identity.tfplan
+sleep 180
+tofu -chdir=envs/apps plan -out=ci-identity-2.tfplan
+tofu -chdir=envs/apps apply ci-identity-2.tfplan
+rm -f envs/apps/ci-identity-2.tfplan
+```
 
 ## 6. Set the secrets without printing them
 
