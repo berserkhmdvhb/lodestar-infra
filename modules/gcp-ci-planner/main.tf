@@ -82,8 +82,18 @@ resource "google_kms_crypto_key_iam_member" "state" {
   member        = "serviceAccount:${google_service_account.planner.email}"
 }
 
+# user_project_override bills every call to the project, so the Cloud Billing API must be enabled there for the billing member below.
+resource "google_project_service" "cloudbilling" {
+  project                    = var.project_id
+  service                    = "cloudbilling.googleapis.com"
+  disable_on_destroy         = false
+  disable_dependent_services = false
+}
+
 # Includes cost data (the budget and spend are readable). Custom billing roles need an organization.
 resource "google_billing_account_iam_member" "viewer" {
+  depends_on = [google_project_service.cloudbilling]
+
   billing_account_id = var.billing_account
   role               = "roles/billing.viewer"
   member             = "serviceAccount:${google_service_account.planner.email}"

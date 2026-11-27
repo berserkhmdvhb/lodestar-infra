@@ -15,6 +15,8 @@ application deploy workflows) and creates its own pool (`github-infra`) and prov
   bucket only; `roles/cloudkms.cryptoKeyEncrypterDecrypter` on the state key only (the `gcp_kms` key provider
   calls Encrypt as well as Decrypt); `roles/billing.viewer` on the billing account, which includes cost data
   (custom billing roles need an organization). Nothing writes; a test fails on any write or admin role.
+- The module enables `cloudbilling.googleapis.com` in the project: requests are billed to the project
+  (`user_project_override`), so the billing-account role binding fails with `SERVICE_DISABLED` otherwise.
 
 Inputs: `project_id`, `project_number`, `github_repository`, `github_owner_id`, `github_repo_id`,
 `sub_claim_prefix`, `state_bucket`, `state_kms_key_id`, `billing_account` (all required), `pool_id`,
