@@ -43,8 +43,9 @@
 |---|---|---|---|
 | 0 | Scaffold | L0.1 | **done** (2026-11-20) |
 | 1 | State and Google Cloud | L1.1 to L1.7 | **done** (2026-11-27; see "Phase 1 closed" under L1.7). It imports the owner's by-hand GKE setup; see "Carried from the owner's by-hand setup" below |
-| 2 | Cloudflare | L2.1 to L2.3 | not started |
-| 3 | Environments, CI and docs | L3.1 to L3.3 | not started |
+| 2 | Cloudflare | L2.0 to L2.3 | L2.0 built (PR #7, 2026-11-27); the owner sets Cloudflare up by hand first, then L2.1 to L2.3 import it |
+| 3 | Environments, CI and docs | L3.1 to L3.3 | not started (largely superseded by L1.5 to L1.7 and phase 4) |
+| 4 | A separate production environment | L4.1 to L4.7 | planned (2026-11-27, design approved); build now, the owner applies after the Cloudflare setup |
 
 ### Task L0.1: Scaffold
 **Files:** `README.md` (purpose, layout, the apply workflow, links to the guides), `LICENSE` (Apache-2.0), `.gitignore`, `.pre-commit-config.yaml` (tofu fmt and validate, tflint, checkov, gitleaks), `tools/pins.tsv` and `scripts/tools.sh` (checksum-verified install into `.tools/bin` of tofu, tflint and checkov through `uv tool`), and a `Makefile` (`tools fmt validate lint test check`).
@@ -281,6 +282,20 @@ The repository is public and manages live infrastructure, so CI moves from the l
   - the `startsWith` condition on the secrets bindings: changing it would replace the bindings;
   - the node scopes and spot to on-demand, at the one pool swap before go-live.
 
+### Task L2.0: The tunnel token's secret container and access grant (added 2026-11-27)
+**Files:** `modules/gcp-platform-secret`, the `envs/apps` wiring, tests, and `docs/operations-runbook.md`.
+- [x] **The module:** a map of secret IDs to namespaces. For each secret:
+  - one Secret Manager container, with user-managed replication in the region;
+  - one conditional `secretAccessor` member for the namespace's `external-secrets` principal, titled `eso-<namespace>`, with the expression `resource.name.startsWith("projects/<number>/secrets/<id>/")`;
+  - no version resource: the token value never enters OpenTofu.
+- [x] **`envs/apps`:** `cloudflared-tunnel-token` for namespace `cloudflared`. `modules/gcp-secrets` and `imports.tf` are untouched.
+- [ ] **Owner acceptance:** at the tunnel step of the Cloudflare setup, the plan shows `2 to add, 0 to change, 0 to destroy`; then apply; then "No changes". The token version is added by hand, from stdin.
+
+**Executed (2026-11-27, commits 04d3440 and ea1977d, PR #7):**
+- Tests pin the principal, title, expression, role and region, and cover sibling-secret exclusion and the 63-character namespace cap.
+- The `envs/apps` composition still has 7 app secrets and 5 bindings.
+- `make check` is green with no tfvars. The review was approved; its 3 minor findings were fixed.
+
 ### Task L2.1: Cloudflare zone baseline
 **Files:** `modules/cloudflare-zone`. It covers:
 - the zone settings: Full (strict), Always Use HTTPS, TLS 1.2 minimum, TLS 1.3, Automatic HTTPS Rewrites, and HSTS staged through a variable;
@@ -313,6 +328,103 @@ The registrar stays manual.
 - **The mapping:** each guide step mapped to its resource.
 
 Also cover drift detection, which runs as `tofu plan` on a schedule once credentials exist; that's for later.
+
+## Phase 4: A separate production environment (added 2026-11-27, owner-approved design)
+
+**Spec:** `docs/designs/2026-11-27-production-environment.md`, approved 2026-11-27. The owner answered:
+- the production cluster hosts **all three projects**;
+- the pool is capped at **4 nodes in total**;
+- it uses the **same billing account** as `apps`, in EUR.
+
+**Order:**
+- The code can be built now.
+- The owner applies after the Cloudflare by-hand setup, and before the first production deploy.
+- Every task's PR shows the `apps` plan as **"No changes"**, except L4.6.
+
+**Review focus (phase 4):**
+1. **`apps` drift from a new module input.** Every new input's default must render `apps` byte-identically. The PR plan job and a drift run prove it.
+2. **A fresh-project creation order.** Resources are created, not imported, so the APIs, the container service agent and the cluster's Workload Identity pool must exist before the grants that need them. Explicit `depends_on`, with a test that the graph has them.
+3. **A production identity reachable from `apps`.** No `apps` principal may get a role on production resources, and the production provider must admit only `environment:production` subjects of the listed repositories.
+4. **The state migration of the production bootstrap**, with the same proof as `bootstrap/` before any local state is deleted.
+5. **A public control-plane IP on a newly created cluster.** Production must set `enable_public_endpoint = false`, with a test.
+
+### Task L4.1: Module inputs with byte-identical defaults
+**Files:** `modules/gcp-gke`, `modules/gcp-github-wif`, their tests, and the envs/apps composition test.
+- [ ] **`gcp-gke`:**
+  - `node_locations` (default `null`);
+  - `location_policy` (default `"ANY"`; validation `ANY` | `BALANCED`);
+  - `oauth_scopes` (default: today's two scopes);
+  - the maintenance window days and times (default: today's weekend window);
+  - the pool's `initial_node_count = var.min_node_count` (already ignored in `lifecycle`);
+  - the `location` description says "zone or region".
+- [ ] **`gcp-github-wif`:**
+  - an optional `allowed_environment` term in the provider's attribute condition (default `null`: unchanged);
+  - one pool serving **several repositories**, each with its owner and repository IDs, its immutable subject prefix and its own deployer;
+  - deployer IDs as an input, validated at 30 characters or fewer (the service account limit).
+
+  Choose between one provider per repository and one provider with a repository list, record the ruling, and keep `apps` byte-identical.
+- [ ] **Tests:** for each input, the default renders today's exact values, and the production values render as specified. For WIF: a two-repository case, a foreign repository refused, and a non-production environment refused when `allowed_environment` is set.
+
+### Task L4.2: The state module and the production bootstrap
+**Files:** `modules/gcp-state-backend` (new), `bootstrap/` (refactored), a production bootstrap root, the Makefile root discovery if needed, `dependabot.yml`, and tests.
+- [ ] **The module:** the bucket, the KMS ring and key, `state_admins` (objectAdmin) and `state_readers` (objectViewer plus EncrypterDecrypter), with the bootstrap's existing validations.
+- [ ] **`bootstrap/` calls the module, with `moved` blocks for every resource.** Its tests move with the resources they check. Owner acceptance is the owner's local plan: moves only, 0 to add, 0 to change, 0 to destroy. Hard stop otherwise.
+- [ ] **The production bootstrap root:** the same module for the production project, with a git-ignored `override.tf` backend and the same state-migration proof steps as `bootstrap/`. Its lock file carries the linux_amd64 and darwin_arm64 hashes, and the Makefile validates, lints, scans and tests it.
+
+### Task L4.3: The `envs/prod` composition
+**Files:** `envs/prod/{versions,providers,backend,main,variables,outputs}.tf`, `terraform.tfvars.example`, and tests under `tests/envs-prod/`.
+- [ ] **Modules:**
+  - `gcp-project` (no `artifactregistry`; no `cloudkms`, which the bootstrap owns);
+  - `gcp-network`: `prod-vpc`, `prod-subnet` 10.40.0.0/20, pods 10.50.0.0/16, services 10.60.0.0/20, `prod-router`, `prod-nat`;
+  - the node service account;
+  - `gcp-gke`: cluster `prod`, regional `europe-west1`, nodes in `-b` and `-c`, `spot = false`, `location_policy = "BALANCED"`, `min_node_count = 1` and `max_node_count = 2` per zone (a cap of 4, with a node guaranteed in each zone), the Tuesday/Wednesday window, `enable_public_endpoint = false`, `deletion_protection`;
+  - `gcp-gke-secrets-key`;
+  - `gcp-github-wif`: the three repositories, production only;
+  - `gcp-secrets`: one instance per service with `app_environments = ["production"]` and `db_environments = []`;
+  - `gcp-platform-secret`: the production tunnel token;
+  - `gcp-ci-planner`;
+  - `gcp-budget`: €250, with alerts at 50/90/100/150 %.
+- [ ] **Explicit `depends_on`:** everything on `module.project`; the secrets key's agent grant on the container API; the External Secrets grants on `module.gke`.
+- [ ] **Tests:**
+  - every setting above;
+  - no `apps` identifier or principal anywhere in the root;
+  - no forbidden role;
+  - the `depends_on` edges;
+  - `make check` green with no tfvars.
+
+### Task L4.4: CI for the production root
+**Files:** `.github/workflows/plan.yml`, `.github/workflows/drift.yml`, `scripts/ci-plan.sh` (if needed), the bats tests, and `docs/ci-identity-runbook.md`.
+- [ ] **Separate explicit production jobs:**
+  - each has its own "configured yet?" check and its own `TF_PROD_*` secrets, and authenticates through production's own planner;
+  - drift has its own issue title per root;
+  - no dynamic `secrets[...]` lookup, no `&&/||` fallback between roots, and no reusable workflow.
+- [ ] **The runbook:** the production planner's secrets (names only), and the first production drift run with the public-log identifier scan.
+- [ ] **Tests:** actionlint and zizmor clean; bats asserting that each job reads only its own root's secrets.
+
+### Task L4.5: The owner's production runbook
+**Files:** `docs/production-runbook.md`, and the operations-runbook index.
+- [ ] **Steps, in order:**
+  1. create the project and link billing;
+  2. the production bootstrap apply and state migration, with its proof;
+  3. the `envs/prod` plan, apply and "No changes";
+  4. the cluster add-ons: the namespaces bootstrap per service, External Secrets with a `secret-manager` SecretStore per namespace, and `cloudflared` with 2 or more replicas across zones and a PDB;
+  5. verification, with the same checks as `apps`: private endpoint only, Secrets encryption, flow and audit logs, the Workload Identity probe per namespace;
+  6. entering the production secret values;
+  7. the template's environment-level variables.
+
+  Expected output for every step, zsh-safe, no comments in code blocks, and no real values.
+
+### Task L4.6: Remove production from `apps`
+**Files:** `envs/apps/main.tf` (`local.environments`, the `app_environments` passed to `module.secrets`, `local.secret_keys`), its tests, and the runbook.
+- [ ] **Code:** the plan destroys exactly the production-only `apps` resources: the production deployer and its IAM members, the production External Secrets grant, and the production secret containers. Tests list the exact remaining addresses.
+- [ ] **Owner acceptance:**
+  - the reviewed destroy list matches, resource by resource; anything else is a hard stop;
+  - apply, then "No changes";
+  - the `apps` production namespaces are deleted by hand, following the runbook.
+  - **Precondition:** production is verified (L4.5) and its secret values are entered.
+
+### Task L4.7: The `apps` budget
+- [ ] Raise the `apps` budget from €20 to its real non-production cost, read from its first full months of bills. Owner acceptance: the plan shows only the budget amount changing.
 
 ## Carried from the setup-guide fixes (2026-11-25)
 
