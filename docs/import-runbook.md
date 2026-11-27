@@ -335,3 +335,8 @@ done
 ```
 
 Or delete the state object under the `envs/apps` prefix in the bucket. Then start again at step 2.
+
+## 6. Next: the hardening change
+
+With the import accepted, continue with [`docs/hardening-runbook.md`](hardening-runbook.md): the first
+change to live resources (in place only).

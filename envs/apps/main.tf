@@ -32,6 +32,14 @@ module "project" {
   services   = local.services
 }
 
+module "gke_secrets_key" {
+  source = "../../modules/gcp-gke-secrets-key"
+
+  project_id     = var.project_id
+  project_number = var.project_number
+  region         = var.region
+}
+
 module "network" {
   source = "../../modules/gcp-network"
 
@@ -97,4 +105,6 @@ module "gke" {
   subnetwork           = module.network.subnet_name
   pods_range_name      = module.network.pods_range_name
   services_range_name  = module.network.services_range_name
+
+  database_encryption_key = module.gke_secrets_key.key_id
 }

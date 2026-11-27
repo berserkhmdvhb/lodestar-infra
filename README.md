@@ -14,7 +14,7 @@ after reviewing the plan, runs the state-only import by hand: see [`docs/import-
 | `bootstrap/` | One-off root that creates the remote-state bucket |
 | `modules/` | Reusable modules, each with a `tofu test` file using mock providers |
 | `envs/apps/` | The root for the apps cluster, composed from the modules |
-| `docs/` | Plans, decisions and the import runbook |
+| `docs/` | Plans, decisions, the import runbook and the hardening runbook |
 | `tools/` | `pins.tsv` (pinned, checksum-verified toolchain) and hash-pinned Python requirements |
 | `scripts/` | `tools.sh` installer and its safe archive extractor |
 | `tests/` | Bats tests for the installer |
@@ -42,7 +42,8 @@ With no OpenTofu roots yet, each target prints `no OpenTofu roots yet` and succe
 
 Follow [`docs/import-runbook.md`](docs/import-runbook.md): bootstrap the state bucket once, then plan,
 review and apply the import of `envs/apps` (variables go in git-ignored `*.tfvars` files), then run the
-verification checks.
+verification checks. After that, [`docs/hardening-runbook.md`](docs/hardening-runbook.md) applies the
+security baseline (secrets encryption, RBAC, flow logs, audit logs) as in-place changes.
 
 The step-by-step guides live in the fullstack template repository: `wiki/gke-cluster-setup.md` and
 `wiki/cloudflare-setup.md`.

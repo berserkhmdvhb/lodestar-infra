@@ -96,3 +96,14 @@ run "registry_off_budget_on_no_previews_no_drift" {
     error_message = "previews and drift must be off"
   }
 }
+
+# The key is created, so its id is known only after an apply (the module tests cover the key, the
+# cluster's ENCRYPTED state, flow logs and the audit config).
+run "secrets_key_is_wired_to_the_cluster" {
+  command = apply
+
+  assert {
+    condition     = module.gke_secrets_key.key_id != null
+    error_message = "the secrets key must exist for the cluster"
+  }
+}
