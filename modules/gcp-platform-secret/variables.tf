@@ -24,7 +24,7 @@ variable "secrets" {
   description = "Platform secrets by secret id. The external-secrets service account in the given namespace may read only that secret."
 
   validation {
-    condition     = alltrue([for id, s in var.secrets : can(regex("^[a-zA-Z0-9_-]+$", id)) && can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", s.namespace))])
-    error_message = "secret ids use letters, digits, - and _; namespaces are DNS labels."
+    condition     = alltrue([for id, s in var.secrets : can(regex("^[a-zA-Z0-9_-]+$", id)) && can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", s.namespace)) && length(s.namespace) <= 63])
+    error_message = "secret ids use letters, digits, - and _; namespaces are DNS labels (at most 63 characters)."
   }
 }
