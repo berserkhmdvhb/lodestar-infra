@@ -64,9 +64,15 @@ oldblocks() {
     -e 's/echo "exit=\$?"/printf '"'"'exit=%s\\n'"'"' "$?"/g'
 }
 
+# The blocks of 6.8 (L4.8, written after the split) are not in the old file; every other block is.
+presplit_blocks() {
+  blocks "${NEW[@]}" | grep -vF 'tofu -chdir=envs/apps plan -out=drift.tfplan' \
+    | grep -vF 'tofu -chdir=envs/apps apply drift.tfplan' | grep -vF 'APP_REPO="${GH_REPO}"' || true
+}
+
 @test "every fenced block of the old file (with the 6 documented edits) is in the new set, verbatim, once" {
   oldblocks | LC_ALL=C sort > "$BATS_TEST_TMPDIR/old"
-  blocks "${NEW[@]}" | LC_ALL=C sort > "$BATS_TEST_TMPDIR/new"
+  presplit_blocks | LC_ALL=C sort > "$BATS_TEST_TMPDIR/new"
   [ "$(wc -l < "$BATS_TEST_TMPDIR/old")" -gt 100 ]
   run diff "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new"
   echo "$output" | tr '\f' '~' | head -20

@@ -264,3 +264,79 @@ gh run rerun <run-id> --repo "${GH_REPO}"
 
 Expect: green after the propagation wait (6.6).
 
+
+### 6.8 Live-drift identities (apps)
+
+The template's weekly live-drift check (`drift.yml`, template GKE guide 12.6) runs each environment in a GitHub
+environment `drift-<env>` as a read-only drift reader. `envs/apps` creates that identity for `dev` and `qa`: a
+provider that admits only `drift.yml` on `main` in `drift-<env>`, a service account `gh-drift-<env>` bound to that
+subject, and the cluster-connect role the deployer holds (never a write role). Production's drift identity is
+per service in `envs/prod` (production runbook, step 9).
+
+🔍 The plan. It must only add, and name these 8 resources (the module `github_wif`, for `dev` and `qa`):
+
+```bash
+tofu -chdir=envs/apps plan -out=drift.tfplan
+tofu -chdir=envs/apps show -no-color drift.tfplan | grep -E '# .* will be|^Plan:'
+```
+
+Expect: `Plan: 8 to add, 0 to change, 0 to destroy.` and 8 lines `will be created`: for each of `dev` and `qa`,
+`module.github_wif.google_iam_workload_identity_pool_provider.drift["<env>"]`,
+`module.github_wif.google_service_account.drift["<env>"]`,
+`module.github_wif.google_service_account_iam_member.drift["<env>"]` and
+`module.github_wif.google_project_iam_member.drift["<env>"]`. Any change or destroy: stop, do not apply.
+
+✏️ Apply the reviewed plan, then check the next plan.
+
+```bash
+tofu -chdir=envs/apps apply drift.tfplan
+rm -f envs/apps/drift.tfplan
+tofu -chdir=envs/apps plan -detailed-exitcode
+```
+
+Expect: `Apply complete! Resources: 8 added, 0 changed, 0 destroyed.`, then `No changes.` (exit code 0).
+
+✏️ Set each `drift-<env>` GitHub environment's variables from the outputs. The environments themselves, with no
+required reviewers and deployments limited to `main`, are the template's guide 12.6 (part 4), and the in-cluster
+read-only RBAC is its namespace bootstrap (part 3, `drift.name` in the bootstrap values): neither is repeated here.
+The repository is the template copy named by `GH_REPO` in the env file, saved before the `unset`. An empty output
+stops the loop.
+
+```bash
+source ~/gke-setup.env
+APP_REPO="${GH_REPO}"
+unset GH_REPO
+OUT_PROJECT="$(tofu -chdir=envs/apps output -raw GCP_PROJECT_ID)"
+OUT_CLUSTER="$(tofu -chdir=envs/apps output -raw GKE_CLUSTER)"
+OUT_LOCATION="$(tofu -chdir=envs/apps output -raw GKE_LOCATION)"
+OUT_WIF="$(tofu -chdir=envs/apps output -json DRIFT_WIF_PROVIDER)"
+OUT_SA="$(tofu -chdir=envs/apps output -json DRIFT_SA)"
+if [ -z "${APP_REPO}" ] || [ -z "${OUT_PROJECT}" ] || [ -z "${OUT_CLUSTER}" ] || [ -z "${OUT_LOCATION}" ] || [ -z "${OUT_WIF}" ] || [ -z "${OUT_SA}" ]; then
+  printf 'a value is empty: stop\n'
+else
+  for env in dev qa; do
+    WIF="$(printf '%s' "${OUT_WIF}" | jq -r --arg e "${env}" '.[$e] // empty')"
+    SA="$(printf '%s' "${OUT_SA}" | jq -r --arg e "${env}" '.[$e] // empty')"
+    EDGE="$(gh variable get EDGE_DOMAIN --env "${env}" -R "${APP_REPO}")"
+    if [ -z "${WIF}" ] || [ -z "${SA}" ] || [ -z "${EDGE}" ]; then
+      printf 'nothing for %s: skipped\n' "${env}"
+      continue
+    fi
+    gh variable set GCP_PROJECT_ID --env "drift-${env}" --body "${OUT_PROJECT}" -R "${APP_REPO}"
+    gh variable set GKE_CLUSTER --env "drift-${env}" --body "${OUT_CLUSTER}" -R "${APP_REPO}"
+    gh variable set GKE_LOCATION --env "drift-${env}" --body "${OUT_LOCATION}" -R "${APP_REPO}"
+    gh variable set DRIFT_WIF_PROVIDER --env "drift-${env}" --body "${WIF}" -R "${APP_REPO}"
+    gh variable set DRIFT_SA --env "drift-${env}" --body "${SA}" -R "${APP_REPO}"
+    gh variable set EDGE_DOMAIN --env "drift-${env}" --body "${EDGE}" -R "${APP_REPO}"
+  done
+fi
+```
+
+Expect: six `Created variable ...` (or `Updated variable ...`) lines per environment. `a value is empty: stop` means
+the apply did not finish; `nothing for <env>: skipped` means that environment has no output, or its own
+`EDGE_DOMAIN` is not set yet (set it first, then rerun). Nothing is set in either case. `EDGE_DOMAIN` is copied
+from the deploy environment of the same name, so a drift render sees the host names the deploy rendered.
+
+Turn the check on only after the first deploy of each environment, as the template's guide says: set the repository
+variable `DRIFT_ENABLED` to `true` then (template guide 12.6, part 4). Until it is set, the weekly run skips each
+environment and stays green. Production is not part of this step: its readers come from `envs/prod`.
