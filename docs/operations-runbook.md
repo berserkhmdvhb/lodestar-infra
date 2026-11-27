@@ -1273,6 +1273,33 @@ After the first deploy: `kubectl get externalsecrets --all-namespaces` must show
 for every one. `SecretSyncedError` there means a secret does not exist yet (8.4) or a namespace lacks its
 binding (8.2): `kubectl -n <ns> describe externalsecret <name>` names it.
 
+### 8.6 The Cloudflare tunnel token (`cloudflared` namespace)
+
+The container `cloudflared-tunnel-token` and the one conditional `secretAccessor` grant for the `external-secrets`
+service account of namespace `cloudflared` (title `eso-cloudflared`, limited to that secret) are managed by
+OpenTofu in `envs/apps` (module `gcp-platform-secret`). Do not create or change them by hand: that would show
+as drift. The value never goes through OpenTofu.
+
+1. Plan with your usual variables file. Expect `Plan: 2 to add, 0 to change, 0 to destroy.` (the secret and
+   the grant, nothing else).
+2. Apply that saved plan.
+3. Plan again. Expect `No changes.`
+4. Later, after creating the tunnel in Cloudflare, add the token without echoing it:
+
+```
+read -rs TOKEN
+printf '%s' "${TOKEN}" | gcloud secrets versions add cloudflared-tunnel-token --project "${PROJECT_ID}" --data-file=-
+unset TOKEN
+```
+
+5. Rotation: add a new version the same way, then restart the connector:
+
+```
+kubectl -n cloudflared rollout restart deployment/cloudflared
+```
+
+The output `CLOUDFLARED_TUNNEL_TOKEN_SECRET_ID` gives the secret id for the guide.
+
 ---
 
 ## 9. GitHub repository settings and the release App

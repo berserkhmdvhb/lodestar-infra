@@ -131,6 +131,25 @@ run "secrets_key_is_wired_to_the_cluster" {
   }
 }
 
+# The tunnel token container and its one conditional grant are new (2 adds); the gcp-secrets addresses and
+# keys, which imports.tf targets, stay as they were.
+run "cloudflared_tunnel_token_secret_and_grant" {
+  command = plan
+
+  assert {
+    condition     = output.CLOUDFLARED_TUNNEL_TOKEN_SECRET_ID == "cloudflared-tunnel-token"
+    error_message = "the guide needs the secret id"
+  }
+  assert {
+    condition     = keys(module.platform_secrets.secret_ids) == ["cloudflared-tunnel-token"]
+    error_message = "exactly the one platform secret"
+  }
+  assert {
+    condition     = length(module.secrets.secret_ids) == 7 && length(module.secrets.binding_titles) == 5
+    error_message = "the seven app secrets and five bindings are unchanged"
+  }
+}
+
 # The import list in imports.tf is derived from these locals; they must equal the module defaults.
 run "import_lists_equal_the_module_defaults" {
   command = plan
