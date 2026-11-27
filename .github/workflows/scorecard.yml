@@ -1,0 +1,50 @@
+name: Scorecard
+
+# OpenSSF Scorecard: an assurance report on the repository's supply-chain posture, not a merge gate.
+# It uploads SARIF to code scanning and publishes the result. The Scorecard API refuses published
+# results when the workflow breaks the action's restrictions: no top-level env or defaults, no
+# workflow-level write permission, and in the analysis job no env, container or services, an Ubuntu
+# hosted runner, no run steps, and only the approved actions. For public repositories.
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # the action reads the repository files
+      actions: read # the action reads workflow runs and settings
+      security-events: write # uploads the SARIF results to code scanning
+      id-token: write # the OIDC token that authenticates the published results
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # This action pulls its image by tag, so the SHA pin does not freeze the image. v2.6.0's image cannot be
+      # pulled (ossf/scorecard-action#1752): stay on v2.5.0 until a release whose image pulls.
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: results.sarif
+          category: scorecard

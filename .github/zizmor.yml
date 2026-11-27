@@ -1,0 +1,2 @@
+# Nothing to disable: every audit passes. Add a documented ignore here only when a finding is a false positive.
+rules: {}

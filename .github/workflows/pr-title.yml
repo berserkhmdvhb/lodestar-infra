@@ -1,0 +1,36 @@
+name: PR title
+
+# A squash merge makes the pull request title the commit message on main, so the title must be a
+# Conventional Commit: `type(scope)!: subject`, scope and `!` optional. The job name below is the check
+# name the ruleset requires (scripts/github-settings.sh). It reads only the event payload: no checkout,
+# no token use, no secret.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: PR title (Conventional Commits)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types="build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test"
+          pattern="^(${types})(\([a-z0-9][a-z0-9,._/-]*\))?!?: [^ ].*$"
+          if [[ ! "${TITLE}" =~ ${pattern} ]]; then
+            echo "::error::the pull request title is not a Conventional Commit. Use type(scope)!: subject, type one of ${types//|/, }"
+            echo "- title refused: \`${TITLE}\`" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "- title ok: \`${TITLE}\`" >> "$GITHUB_STEP_SUMMARY"
