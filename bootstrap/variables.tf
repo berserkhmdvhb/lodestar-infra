@@ -47,6 +47,11 @@ variable "state_admins" {
   type        = list(string)
   description = "IAM members (for example a CI identity) allowed to use the bucket and the key."
   default     = []
+
+  validation {
+    condition     = !anytrue([for m in var.state_admins : contains(["allUsers", "allAuthenticatedUsers"], m)])
+    error_message = "state_admins must not contain allUsers or allAuthenticatedUsers."
+  }
 }
 
 variable "noncurrent_versions_kept" {

@@ -158,3 +158,23 @@ run "bad_bucket_name_rejected" {
 
   expect_failures = [var.state_bucket_name]
 }
+
+run "all_users_admin_rejected" {
+  command = plan
+
+  variables {
+    state_admins = ["allUsers"]
+  }
+
+  expect_failures = [var.state_admins]
+}
+
+run "all_authenticated_users_admin_rejected" {
+  command = plan
+
+  variables {
+    state_admins = ["allAuthenticatedUsers"]
+  }
+
+  expect_failures = [var.state_admins]
+}
