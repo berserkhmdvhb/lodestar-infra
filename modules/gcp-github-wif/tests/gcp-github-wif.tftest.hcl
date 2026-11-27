@@ -457,23 +457,141 @@ run "production_call_with_previews_is_refused" {
   expect_failures = [var.allowed_environment]
 }
 
-run "production_call_with_drift_is_refused" {
+run "production_call_with_drift_defaulting_to_two_environments_is_refused" {
   command = plan
 
   variables {
-    environments        = ["production"]
+    environments        = ["dev", "production"]
     allowed_environment = "production"
     enable_drift        = true
+    drift_environments  = null
   }
 
   expect_failures = [var.allowed_environment]
+}
+
+run "production_call_with_drift_on_dev_is_refused" {
+  command = plan
+
+  variables {
+    environments        = ["dev", "production"]
+    allowed_environment = "production"
+    enable_drift        = true
+    drift_environments  = ["dev"]
+  }
+
+  expect_failures = [var.allowed_environment]
+}
+
+run "production_call_with_drift_on_production_passes_with_exact_identity" {
+  command = plan
+
+  variables {
+    environments          = ["production"]
+    allowed_environment   = "production"
+    pool_id               = "gh-web"
+    enable_drift          = true
+    drift_environments    = ["production"]
+    drift_account_ids     = { production = "gh-drift-web" }
+    deployer_cluster_role = "projects/your-project-id/roles/gkeDnsConnect"
+  }
+
+  assert {
+    condition     = keys(google_iam_workload_identity_pool_provider.drift) == ["production"] && length(google_service_account.drift) == 1
+    error_message = "exactly one drift provider and reader"
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.drift["production"].attribute_condition == "assertion.repository_owner_id=='123' && assertion.repository_id=='456' && assertion.environment=='drift-production' && assertion.job_workflow_ref.matches('^example-owner/example-repo/\\\\.github/workflows/drift\\\\.yml@refs/heads/main$')"
+    error_message = "drift condition: this repository, drift-production, drift.yml on main"
+  }
+  assert {
+    condition     = output.drift_condition["production"] == google_iam_workload_identity_pool_provider.drift["production"].attribute_condition
+    error_message = "drift_condition output"
+  }
+  assert {
+    condition     = google_service_account.drift["production"].account_id == "gh-drift-web" && output.drift_service_accounts["production"] == google_service_account.drift["production"].email
+    error_message = "drift account id and output"
+  }
+  assert {
+    condition     = google_service_account_iam_member.drift["production"].member == "principal://iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/gh-web/subject/repo:example-owner@123/example-repo@456:environment:drift-production"
+    error_message = "the exact drift-production subject"
+  }
+  assert {
+    condition     = output.drift_cluster_roles == { production = "projects/your-project-id/roles/gkeDnsConnect" } && output.drift_cluster_roles == output.deployer_cluster_roles
+    error_message = "the drift role is the deployer's connect role"
+  }
+}
+
+run "drift_subset_and_custom_ids" {
+  command = plan
+
+  variables {
+    enable_drift       = true
+    drift_environments = ["dev", "qa"]
+    drift_account_ids  = { dev = "gh-drift-dev-x" }
+  }
+
+  assert {
+    condition     = keys(google_service_account.drift) == ["dev", "qa"] && google_service_account.drift["dev"].account_id == "gh-drift-dev-x" && google_service_account.drift["qa"].account_id == "gh-drift-qa"
+    error_message = "subset of environments; custom id with fallback"
+  }
+  assert {
+    condition     = keys(output.drift_service_accounts) == ["dev", "qa"] && keys(output.drift_workload_identity_providers) == ["dev", "qa"]
+    error_message = "outputs follow the subset"
+  }
+}
+
+run "drift_environments_outside_environments_refused" {
+  command = plan
+
+  variables {
+    enable_drift       = true
+    drift_environments = ["staging"]
+  }
+
+  expect_failures = [var.drift_environments]
+}
+
+run "drift_account_id_badly_shaped_refused" {
+  command = plan
+
+  variables {
+    drift_account_ids = { dev = "ab" }
+  }
+
+  expect_failures = [var.drift_account_ids]
+}
+
+run "default_drift_id_too_long_refused" {
+  command = plan
+
+  variables {
+    environments         = ["a-very-long-environment-name"]
+    deployer_account_ids = { a-very-long-environment-name = "gh-deployer-ok" }
+  }
+
+  expect_failures = [var.drift_account_ids]
+}
+
+run "drift_defaults_keep_every_environment_and_gh_drift_names" {
+  command = plan
+
+  variables {
+    enable_drift = true
+  }
+
+  assert {
+    condition     = toset(keys(google_service_account.drift)) == toset(["dev", "qa", "production"]) && alltrue([for e, s in google_service_account.drift : s.account_id == "gh-drift-${e}"])
+    error_message = "unchanged defaults"
+  }
 }
 
 run "default_deployer_id_too_long_is_refused" {
   command = plan
 
   variables {
-    environments = ["a-very-long-environment-name"]
+    environments      = ["a-very-long-environment-name"]
+    drift_account_ids = { a-very-long-environment-name = "gh-drift-ok" }
   }
 
   expect_failures = [var.deployer_account_ids]

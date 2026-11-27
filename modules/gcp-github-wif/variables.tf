@@ -70,8 +70,8 @@ variable "allowed_environment" {
   }
 
   validation {
-    condition     = var.allowed_environment == null || (!var.enable_previews && !var.enable_drift)
-    error_message = "With allowed_environment set, enable_previews and enable_drift must be off: their providers admit other environment subjects into the same pool."
+    condition     = var.allowed_environment == null || (!var.enable_previews && (!var.enable_drift || toset(coalesce(var.drift_environments, var.environments)) == toset([var.allowed_environment])))
+    error_message = "With allowed_environment set, enable_previews must be off, and enable_drift is allowed only with drift_environments exactly [allowed_environment]: any other provider admits other environment subjects into the same pool."
   }
 }
 
@@ -93,6 +93,27 @@ variable "deployer_account_ids" {
   validation {
     condition     = alltrue([for e in var.environments : can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", lookup(var.deployer_account_ids, e, "gh-deployer-${e}")))])
     error_message = "Every resulting deployer service account ID (given here, else gh-deployer-<environment>) must be 6 to 30 characters: lowercase letters, digits and hyphens, starting with a letter."
+  }
+}
+
+variable "drift_account_ids" {
+  type        = map(string)
+  description = "Drift reader service account ID per environment (6 to 30 characters). An environment not listed keeps gh-drift-<environment>."
+  default     = {}
+
+  validation {
+    condition     = alltrue([for id in values(var.drift_account_ids) : can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", id))])
+    error_message = "Each drift account ID must be 6 to 30 characters: a lowercase letter, then lowercase letters, digits or hyphens, ending in a letter or digit."
+  }
+
+  validation {
+    condition     = alltrue([for e in keys(var.drift_account_ids) : contains(var.environments, e)])
+    error_message = "drift_account_ids may only name environments listed in var.environments."
+  }
+
+  validation {
+    condition     = alltrue([for e in var.environments : can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", lookup(var.drift_account_ids, e, "gh-drift-${e}")))])
+    error_message = "Every resulting drift service account ID (given here, else gh-drift-<environment>) must be 6 to 30 characters: lowercase letters, digits and hyphens, starting with a letter."
   }
 }
 
@@ -142,4 +163,15 @@ variable "enable_drift" {
   type        = bool
   description = "Create one live-drift provider and reader per environment."
   default     = false
+}
+
+variable "drift_environments" {
+  type        = list(string)
+  description = "Environments that get a drift reader when enable_drift is on. null means every environment in var.environments."
+  default     = null
+
+  validation {
+    condition     = var.drift_environments == null ? true : alltrue([for e in var.drift_environments : contains(var.environments, e)])
+    error_message = "drift_environments must be null or a subset of var.environments."
+  }
 }
