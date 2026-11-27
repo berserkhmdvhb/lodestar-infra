@@ -26,12 +26,35 @@ STUB
 
 ruleset_json() { grep -m1 '"name":"main"' <<<"$output"; }
 
-@test "dry run is the default: no gh call except repo view, nothing applied" {
+@test "dry run is the default: only reads reach gh, nothing is written" {
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" == *DRY-RUN* ]]
-  [ "$(wc -l < "$GH_LOG")" -eq 1 ]
+  [ "$(wc -l < "$GH_LOG")" -eq 2 ]
   grep -q '^repo view' "$GH_LOG"
+  ! grep -q -- '-X' "$GH_LOG"
+}
+
+@test "dry run says POST when no main ruleset exists and PUT with its id when one does" {
+  run bash "$SCRIPT"
+  [[ "$output" == *"DRY-RUN POST /repos/example-owner/example-repo/rulesets"* ]]
+  export GH_RULESETS='[{"id":77,"name":"main"}]'
+  run bash "$SCRIPT"
+  [[ "$output" == *"DRY-RUN PUT /repos/example-owner/example-repo/rulesets/77"* ]]
+  [[ "$output" != *"DRY-RUN POST"*rulesets* ]]
+}
+
+@test "dry run with an unreadable ruleset list says create or update" {
+  export GH_FAIL="/rulesets?"
+  run bash "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"would create"* ]]
+}
+
+@test "the squash commit title and message come from the PR" {
+  run bash "$SCRIPT"
+  [[ "$output" == *'"squash_merge_commit_title":"PR_TITLE"'* ]]
+  [[ "$output" == *'"squash_merge_commit_message":"PR_BODY"'* ]]
 }
 
 @test "the repository comes from gh, nothing is hard-coded" {

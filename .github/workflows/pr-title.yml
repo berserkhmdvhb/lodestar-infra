@@ -19,8 +19,7 @@ jobs:
     name: PR title (Conventional Commits)
     runs-on: ubuntu-24.04
     timeout-minutes: 2
-    permissions:
-      contents: read
+    permissions: {}
     steps:
       - name: Check the title
         env:

@@ -56,6 +56,7 @@ call() {
 call PATCH "/repos/$REPO" '{
   "allow_squash_merge": true, "allow_merge_commit": false, "allow_rebase_merge": false,
   "delete_branch_on_merge": true,
+  "squash_merge_commit_title": "PR_TITLE", "squash_merge_commit_message": "PR_BODY",
   "security_and_analysis": {
     "secret_scanning": {"status": "enabled"},
     "secret_scanning_push_protection": {"status": "enabled"}}}'
@@ -80,14 +81,21 @@ RULESET="$(jq -n --arg c "$REQUIRED_CHECK" --arg t "$TITLE_CHECK" --argjson app 
     {type: "non_fast_forward"},
     {type: "deletion"}]}')"
 
-ID=""
-if [[ "$MODE" == apply ]]; then
-  LIST="$(gh api "/repos/$REPO/rulesets?per_page=100" 2>&1)" || die "GET /repos/$REPO/rulesets failed: $LIST"
+# The lookup is a read, so a dry run does it too and can say whether it would create or update.
+ID="" KNOWN=true
+if LIST="$(gh api "/repos/$REPO/rulesets?per_page=100" 2>&1)"; then
   ID="$(jq -r '[.[] | select(.name == "main") | .id][0] // empty' <<<"$LIST")"
+elif [[ "$MODE" == apply ]]; then
+  die "GET /repos/$REPO/rulesets failed: $LIST"
+else
+  KNOWN=false
 fi
 if [[ -n "$ID" ]]; then
   call PUT "/repos/$REPO/rulesets/$ID" "$RULESET"
-else
+elif [[ "$KNOWN" == true ]]; then
   call POST "/repos/$REPO/rulesets" "$RULESET"
+else
+  echo "# ruleset lookup failed: would create (POST /repos/$REPO/rulesets) or update (PUT /repos/$REPO/rulesets/<id>)"
+  jq -c . <<<"$RULESET"
 fi
 echo "# done ($MODE)"

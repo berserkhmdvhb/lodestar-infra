@@ -1,2 +1,4 @@
-# Nothing to disable: every audit passes. Add a documented ignore here only when a finding is a false positive.
+# zizmor runs with --offline (make actions), so the online audits (impostor-commit, known-vulnerable-actions,
+# ref-version-mismatch) do not run: the SHA pins are NOT network-verified in CI. They were checked by hand when pinned.
+# Nothing to disable: every offline audit passes. Add a documented ignore here only for a false positive.
 rules: {}
