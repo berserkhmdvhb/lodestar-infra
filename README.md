@@ -13,6 +13,7 @@ after reviewing the plan, runs the state-only import by hand: see [`docs/import-
 | --- | --- |
 | `bootstrap/` | One-off root that creates the remote-state bucket |
 | `modules/` | Reusable modules, each with a `tofu test` file using mock providers |
+| `modules/gcp-platform-secret` | Secret containers for non-app namespaces (the Cloudflare tunnel token) with one conditional access grant each; see [operations runbook 8.6](docs/operations-runbook.md) |
 | `envs/apps/` | The root for the apps cluster, composed from the modules |
 | `docs/` | Plans, decisions, the import runbook, the hardening runbook, the [CI identity runbook](docs/ci-identity-runbook.md) and the [operations runbook](docs/operations-runbook.md) of every manual step |
 | `tools/` | `pins.tsv` (pinned, checksum-verified toolchain) and hash-pinned Python requirements |
