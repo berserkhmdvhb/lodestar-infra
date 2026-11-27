@@ -66,20 +66,25 @@ form: put that in `ci_sub_claim_prefix`, plan and apply again (see the troublesh
 Save them:
 
 ```bash
-printf 'export LODESTAR_REPO="%s"\n' "${LODESTAR_REPO}" >> ~/gke-setup.env
-printf 'export LODESTAR_REPO_ID="%s"\n' "${LODESTAR_REPO_ID}" >> ~/gke-setup.env
-printf 'export LODESTAR_SUB_PREFIX="%s"\n' "${LODESTAR_SUB_PREFIX}" >> ~/gke-setup.env
+grep -q '^export LODESTAR_REPO=' ~/gke-setup.env || printf 'export LODESTAR_REPO="%s"\n' "${LODESTAR_REPO}" >> ~/gke-setup.env
+grep -q '^export LODESTAR_REPO_ID=' ~/gke-setup.env || printf 'export LODESTAR_REPO_ID="%s"\n' "${LODESTAR_REPO_ID}" >> ~/gke-setup.env
+grep -q '^export LODESTAR_SUB_PREFIX=' ~/gke-setup.env || printf 'export LODESTAR_SUB_PREFIX="%s"\n' "${LODESTAR_SUB_PREFIX}" >> ~/gke-setup.env
 ```
 
 ## 2. Add the three variables
 
+Each line is appended only if its key is absent, so running the block twice is harmless (a second copy of a
+key fails every later plan with "Attribute redefined"):
+
 ```bash
-printf 'ci_github_repository = "%s"\n' "${LODESTAR_REPO}" >> envs/apps/terraform.tfvars
-printf 'ci_github_repo_id    = "%s"\n' "${LODESTAR_REPO_ID}" >> envs/apps/terraform.tfvars
-printf 'ci_sub_claim_prefix  = "%s"\n' "${LODESTAR_SUB_PREFIX}" >> envs/apps/terraform.tfvars
+grep -q '^ci_github_repository ' envs/apps/terraform.tfvars || printf 'ci_github_repository = "%s"\n' "${LODESTAR_REPO}" >> envs/apps/terraform.tfvars
+grep -q '^ci_github_repo_id ' envs/apps/terraform.tfvars || printf 'ci_github_repo_id    = "%s"\n' "${LODESTAR_REPO_ID}" >> envs/apps/terraform.tfvars
+grep -q '^ci_sub_claim_prefix ' envs/apps/terraform.tfvars || printf 'ci_sub_claim_prefix  = "%s"\n' "${LODESTAR_SUB_PREFIX}" >> envs/apps/terraform.tfvars
+tofu fmt envs/apps/terraform.tfvars
 ```
 
-`terraform.tfvars` is git-ignored: never commit it.
+`terraform.tfvars` is git-ignored: never commit it. If a key is already there with an old value, edit that line
+by hand: the block never overwrites.
 
 ## 3. Plan
 
