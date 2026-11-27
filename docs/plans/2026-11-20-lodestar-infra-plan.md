@@ -353,7 +353,6 @@ Also cover drift detection, which runs as `tofu plan` on a schedule once credent
 - [ ] **`gcp-gke`:**
   - `node_locations` (default `null`);
   - `location_policy` (default `"ANY"`; validation `ANY` | `BALANCED`);
-  - `total_max_node_count` (default `null`; when set it replaces the per-zone maximum);
   - `oauth_scopes` (default: today's two scopes);
   - the maintenance window days and times (default: today's weekend window);
   - the pool's `initial_node_count = var.min_node_count` (already ignored in `lifecycle`);
@@ -378,7 +377,7 @@ Also cover drift detection, which runs as `tofu plan` on a schedule once credent
   - `gcp-project` (no `artifactregistry`; no `cloudkms`, which the bootstrap owns);
   - `gcp-network`: `prod-vpc`, `prod-subnet` 10.40.0.0/20, pods 10.50.0.0/16, services 10.60.0.0/20, `prod-router`, `prod-nat`;
   - the node service account;
-  - `gcp-gke`: cluster `prod`, regional `europe-west1`, nodes in `-b` and `-c`, `spot = false`, `location_policy = "BALANCED"`, `total_max_node_count = 4`, the Tuesday/Wednesday window, `enable_public_endpoint = false`, `deletion_protection`;
+  - `gcp-gke`: cluster `prod`, regional `europe-west1`, nodes in `-b` and `-c`, `spot = false`, `location_policy = "BALANCED"`, `min_node_count = 1` and `max_node_count = 2` per zone (a cap of 4, with a node guaranteed in each zone), the Tuesday/Wednesday window, `enable_public_endpoint = false`, `deletion_protection`;
   - `gcp-gke-secrets-key`;
   - `gcp-github-wif`: the three repositories, production only;
   - `gcp-secrets`: one instance per service with `app_environments = ["production"]` and `db_environments = []`;

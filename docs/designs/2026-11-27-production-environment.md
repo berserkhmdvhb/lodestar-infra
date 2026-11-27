@@ -46,7 +46,9 @@ change, except for the one reviewed migration step at the end.
 - **Q1: all three projects.** The production cluster hosts the production of the template's app, the training platform
   and the personal site. The deploy identity admits a list of repositories, with one deployer per repository, and
   secrets are keyed per service.
-- **Q2: the cap is agreed.** The production pool is capped at 4 nodes in total (`total_max_node_count = 4`).
+- **Q2: the cap is agreed.** The production pool is capped at 4 nodes, as per-zone limits of 1–2 nodes in each of the
+  2 zones. The builder check showed that a total cap sets no per-zone floor (BALANCED is best effort). Per-zone limits
+  give the same cap of 4 and also guarantee a node in each zone.
 - **Q3: the same billing account as `apps`, in EUR.**
 
 The questions as asked:
@@ -100,7 +102,7 @@ new input; only its description changes from "zone". `spot` is also already a va
 |---|---|---|
 | `node_locations` | `null` | `["europe-west1-b", "europe-west1-c"]` |
 | `location_policy` | `"ANY"` | `"BALANCED"` (spreads on-demand nodes across zones; ANY suits spot) |
-| `total_max_node_count` | `null` (the per-zone limits apply) | per Q2 |
+| per-zone `min_node_count` / `max_node_count` | 1 / 3 (today) | 1 / 2: a cap of 4 across 2 zones and a guaranteed node per zone (Q2) |
 | `oauth_scopes` | the current two scopes | the same two scopes |
 | maintenance window | today's weekend window | **Tuesday and Wednesday**, so `apps` upgrades first |
 
@@ -218,7 +220,7 @@ design. That decision includes whether CI plans it, which needs a read-only Clou
 | KMS (state and secrets keys) | <$1 | confirmed: $0.06 per key version, $0.03 per 10,000 operations |
 | Egress through the tunnel; logging within the free allotment | a few $ | depends on traffic |
 | **Steady state** | **≈ $200, about €185** | |
-| **Worst case at the node ceiling** | **≈ $280 with a 4-node cap; ≈ $390 with 6** | see Q2 |
+| **Worst case at the node ceiling** | **≈ $280 at the 4-node cap** | see Q2 |
 
 Cloud SQL for PostgreSQL comes on top: roughly $50 for the smallest dedicated-core zonal instance, about double for
 high availability. **Before applying, confirm the node and disk prices in the Google Cloud Pricing Calculator**
@@ -269,7 +271,7 @@ Nothing is deployed to production yet, so there is no traffic to move.
 
 ## Phase P tasks (outline, planned in detail after approval)
 
-1. **P.1 `gcp-gke` inputs:** `node_locations`, `location_policy`, `total_max_node_count`, `oauth_scopes`, the maintenance
+1. **P.1 `gcp-gke` inputs:** `node_locations`, `location_policy`, `oauth_scopes`, the maintenance
    window and `initial_node_count`, all with byte-identical defaults. Also `gcp-github-wif`'s optional environment term,
    and per Q1, multi-repository deployers and per-service secrets. Each change is proven by tests, and by the `apps`
    PR plan showing "No changes".
