@@ -63,3 +63,12 @@ run "project_number_must_be_digits" {
 
   expect_failures = [var.project_number]
 }
+
+run "key_id_is_known_at_plan" {
+  command = plan
+
+  assert {
+    condition     = output.key_id == "projects/your-project-id/locations/europe-west1/keyRings/gke/cryptoKeys/secrets"
+    error_message = "key_id is built from the inputs so the cluster's ENCRYPTED state is known at plan"
+  }
+}

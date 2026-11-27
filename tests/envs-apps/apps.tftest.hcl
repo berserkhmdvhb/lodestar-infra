@@ -97,13 +97,12 @@ run "registry_off_budget_on_no_previews_no_drift" {
   }
 }
 
-# The key is created, so its id is known only after an apply (the module tests cover the key, the
-# cluster's ENCRYPTED state, flow logs and the audit config).
+# key_id is built from inputs, so it is known at plan and the cluster's ENCRYPTED state is reviewable.
 run "secrets_key_is_wired_to_the_cluster" {
-  command = apply
+  command = plan
 
   assert {
-    condition     = module.gke_secrets_key.key_id != null
-    error_message = "the secrets key must exist for the cluster"
+    condition     = module.gke_secrets_key.key_id == "projects/your-project-id/locations/europe-west1/keyRings/gke/cryptoKeys/secrets"
+    error_message = "the cluster must get the secrets key id"
   }
 }
