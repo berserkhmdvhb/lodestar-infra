@@ -283,7 +283,7 @@ The repository is public and manages live infrastructure, so CI moves from the l
   - the node scopes and spot to on-demand, at the one pool swap before go-live.
 
 ### Task L2.0: The tunnel token's secret container and access grant (added 2026-11-27)
-**Files:** `modules/gcp-platform-secret`, the `envs/apps` wiring, tests, and `docs/operations-runbook.md`.
+**Files:** `modules/gcp-platform-secret`, the `envs/apps` wiring, tests, and `docs/operations/`.
 - [x] **The module:** a map of secret IDs to namespaces. For each secret:
   - one Secret Manager container, with user-managed replication in the region;
   - one conditional `secretAccessor` member for the namespace's `external-secrets` principal, titled `eso-<namespace>`, with the expression `resource.name.startsWith("projects/<number>/secrets/<id>/")`;

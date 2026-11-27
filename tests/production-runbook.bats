@@ -44,7 +44,7 @@ slug() { tr 'A-Z' 'a-z' | sed -E 's/[`]//g; s/[^a-z0-9 _-]//g; s/ /-/g'; }
 }
 
 @test "the operations runbook links to the production runbook" {
-  grep -qF '](production-runbook.md)' "$ROOT/docs/operations-runbook.md"
+  grep -qF '](../production-runbook.md)' "$ROOT/docs/operations/README.md"
 }
 
 @test "every code block passes bash -n" {
