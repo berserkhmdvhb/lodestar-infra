@@ -3,7 +3,7 @@
 #
 # Rule: a pin is the newest stable release published at least 7 days before it was pinned.
 # Pinned on 2026-11-20. The sha256 comes from the vendor's checksum file: tofu (tofu_<v>_SHA256SUMS),
-# tflint and tflint-ruleset-google (checksums.txt), gitleaks (gitleaks_<v>_checksums.txt). shellcheck
+# tflint and tflint-ruleset-google (checksums.txt), gitleaks (gitleaks_<v>_checksums.txt), actionlint (actionlint_<v>_checksums.txt). shellcheck
 # publishes no checksum file: its sha256 is the GitHub release-asset digest, confirmed against the
 # downloaded bytes. bats is the GitHub tag archive (no vendor checksum exists), hashed on download
 # (trust on first use of the tag archive, not vendor-attested).
@@ -27,3 +27,5 @@ bats	1.14.0	linux-amd64	https://github.com/bats-core/bats-core/archive/refs/tags
 python	3.13	any	uv:python	-
 checkov	3.4.5	any	uv:checkov	-
 pre-commit	4.7.0	any	uv:pre-commit	-
+actionlint	1.7.12	linux-amd64	https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz	8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+zizmor	1.32.0	any	uv:zizmor	-

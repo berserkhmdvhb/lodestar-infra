@@ -13,7 +13,7 @@ ROOTS := $(sort $(patsubst %/,%,$(dir $(shell find bootstrap modules envs -name 
 TF_DIRS := $(wildcard bootstrap modules envs)
 NO_ROOTS = echo "no OpenTofu roots yet"
 
-.PHONY: tools tools-dry-run fmt validate lint test shellcheck secrets check
+.PHONY: tools tools-dry-run fmt validate lint test shellcheck secrets actions check
 
 tools:
 	@scripts/tools.sh install
@@ -65,4 +65,9 @@ shellcheck:
 secrets:
 	@gitleaks git --redact --no-banner .
 
-check: fmt validate lint test shellcheck secrets
+# Workflow gates. zizmor runs offline so it needs no token and gives the same result locally and in CI.
+actions:
+	@actionlint
+	@zizmor --offline --no-progress .github
+
+check: fmt validate lint test shellcheck secrets actions
