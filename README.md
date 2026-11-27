@@ -59,6 +59,8 @@ bash scripts/github-settings.sh            # dry run: prints every call and the 
 bash scripts/github-settings.sh --apply    # applies it; safe to repeat (the ruleset is updated in place)
 ```
 
+Run it from this checkout: it reads the repository from `origin` and ignores `GH_REPO`.
+
 Run `--apply` only after the first push or pull request has produced both checks (`CI OK` and
 `PR title (Conventional Commits)`) once, so the first pull request can merge.
 

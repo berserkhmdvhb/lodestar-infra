@@ -4,7 +4,9 @@
 # Usage: bash scripts/github-settings.sh [--dry-run | --apply]
 #   --dry-run  (default) print every call it would make, with the JSON payload; changes nothing.
 #   --apply    perform the calls. Run it once, as a repository admin, with your own `gh auth login`.
-# Needs: gh, jq. The repository is read from `gh repo view` at runtime, nothing is hard-coded.
+# Needs: gh, jq, git. The repository is read from this checkout's `origin` remote, nothing is hard-coded.
+# GH_REPO (which gh would honour over the checkout) is never used: if it names another repository the
+# script stops, and every gh call runs with it unset.
 # Idempotent: an existing ruleset named `main` is updated in place, the rest are plain PATCH/PUT calls.
 # On a failure the API error body is printed and the script stops.
 #
@@ -24,7 +26,7 @@ while (($#)); do
   case "$1" in
     --dry-run) MODE=dry ;;
     --apply) MODE=apply ;;
-    -h | --help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,12p' "$0"; exit 0 ;;
     *) die "unknown argument: $1 (use --dry-run or --apply)" ;;
   esac
   shift
@@ -32,8 +34,19 @@ done
 command -v gh >/dev/null || die "gh is required"
 command -v jq >/dev/null || die "jq is required"
 
-REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
-[[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "could not read the repository from gh repo view"
+command -v git >/dev/null || die "git is required"
+
+# gh honours GH_REPO over the current directory: every call runs without it.
+gh() { env -u GH_REPO gh "$@"; }
+
+URL="$(git -C "$(dirname "$0")/.." remote get-url origin 2>/dev/null)" || die "this checkout has no origin remote"
+REPO="${URL#*github.com[:/]}"
+REPO="${REPO%/}"
+REPO="${REPO%.git}"
+[[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "could not read owner/name from the origin URL"
+if [[ -n "${GH_REPO:-}" && "$GH_REPO" != "$REPO" ]]; then
+  die "GH_REPO is set to $GH_REPO but this checkout is $REPO; run: unset GH_REPO"
+fi
 echo "# github-settings: $REPO, mode=$MODE"
 
 # call METHOD PATH [JSON]: print it in a dry run, send it with --apply; a failure prints the error body.

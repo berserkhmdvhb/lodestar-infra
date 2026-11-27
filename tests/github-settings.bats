@@ -14,7 +14,7 @@ setup() {
   cat > "$D/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 echo "$*" >> "$GH_LOG"
-if [[ "$1 $2" == "repo view" ]]; then echo "example-owner/example-repo"; exit 0; fi
+if [[ -n "${GH_REPO:-}" ]]; then echo "stub: GH_REPO leaked into gh" >> "$GH_LOG"; fi
 if [[ "$*" == *--input* ]]; then cat >> "$GH_LOG"; echo >> "$GH_LOG"; fi
 if [[ -n "${GH_FAIL:-}" && "$*" == *"$GH_FAIL"* ]]; then echo '{"message":"Validation Failed: boom"}'; exit 1; fi
 if [[ "$*" == *"/rulesets?"* && "$*" != *-X* ]]; then echo "${GH_RULESETS:-[]}"; fi
@@ -22,7 +22,16 @@ exit 0
 STUB
   chmod +x "$D/bin/gh"
   export PATH="$D/bin:$PATH"
+  unset GH_REPO
+  # a throwaway checkout: the script finds its repository from the origin of the checkout it lives in
+  mkdir -p "$D/co/scripts"
+  cp "$SCRIPT" "$D/co/scripts/"
+  git -C "$D/co" init -q
+  git -C "$D/co" remote add origin "git@github.com:example-owner/example-repo.git"
+  SCRIPT="$D/co/scripts/github-settings.sh"
 }
+
+set_origin() { git -C "$D/co" remote set-url origin "$1"; }
 
 ruleset_json() { grep -m1 '"name":"main"' <<<"$output"; }
 
@@ -30,8 +39,8 @@ ruleset_json() { grep -m1 '"name":"main"' <<<"$output"; }
   run bash "$SCRIPT"
   [ "$status" -eq 0 ]
   [[ "$output" == *DRY-RUN* ]]
-  [ "$(wc -l < "$GH_LOG")" -eq 2 ]
-  grep -q '^repo view' "$GH_LOG"
+  [ "$(wc -l < "$GH_LOG")" -eq 1 ]
+  grep -q 'rulesets' "$GH_LOG"
   ! grep -q -- '-X' "$GH_LOG"
 }
 
@@ -57,9 +66,43 @@ ruleset_json() { grep -m1 '"name":"main"' <<<"$output"; }
   [[ "$output" == *'"squash_merge_commit_message":"PR_BODY"'* ]]
 }
 
-@test "the repository comes from gh, nothing is hard-coded" {
+@test "the repository comes from the origin remote, nothing is hard-coded" {
   run bash "$SCRIPT"
-  [[ "$output" == *"example-owner/example-repo"* ]]
+  [[ "$output" == *"# github-settings: example-owner/example-repo, mode=dry"* ]]
+}
+
+@test "HTTPS origin URLs parse to owner/name, with and without .git" {
+  set_origin "https://github.com/example-owner/example-repo.git"
+  run bash "$SCRIPT"
+  [[ "$output" == *"# github-settings: example-owner/example-repo, mode=dry"* ]]
+  set_origin "https://github.com/example-owner/example-repo"
+  run bash "$SCRIPT"
+  [[ "$output" == *"# github-settings: example-owner/example-repo, mode=dry"* ]]
+}
+
+@test "a non-GitHub origin is refused" {
+  set_origin "https://example.com/nope"
+  run bash "$SCRIPT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not read owner/name"* ]]
+}
+
+@test "GH_REPO naming another repository stops the script before any gh call" {
+  export GH_REPO="example-owner/other-repo"
+  run bash "$SCRIPT" --apply
+  [ "$status" -ne 0 ]
+  msg="$output"
+  [[ "$msg" == *"GH_REPO is set to example-owner/other-repo but this checkout is example-owner/example-repo; run: unset GH_REPO"* ]]
+  [ ! -s "$GH_LOG" ]
+}
+
+@test "GH_REPO equal to the checkout repository proceeds, and never reaches gh" {
+  export GH_REPO="example-owner/example-repo"
+  run bash "$SCRIPT" --apply
+  [ "$status" -eq 0 ]
+  grep -q -- '-X POST' "$GH_LOG"
+  run grep -q 'GH_REPO leaked' "$GH_LOG"
+  [ "$status" -ne 0 ]
 }
 
 @test "ruleset requires both checks, strict, from the Actions app" {

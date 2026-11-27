@@ -64,6 +64,11 @@ A block with several marks changes things in the order shown.
      `echo` interprets them, so a correct value looks wrong.
   3. **Comments.** An interactive zsh does not ignore `# comment` by default. Run `setopt interactive_comments`
      once in the terminal, or leave the comments out when you paste.
+- **`GH_REPO` pitfall.** The `gh` CLI honours the `GH_REPO` environment variable over the current directory.
+  The env file sets it to the template repository, so a `gh` command run in this repository acts on the
+  template. For `lodestar-infra` commands either run `unset GH_REPO` first or pass
+  `-R "<owner>/lodestar-infra"`. `scripts/github-settings.sh` reads its repository from this checkout's
+  `origin` remote and refuses to run while `GH_REPO` points elsewhere.
 - **No comments in code blocks.** Code blocks contain no comments, so they paste safely into any zsh (where
   `#` is not a comment by default); the explanations live in the text around them.
 - **Never paste prose.** A sentence copied into the shell is run as a command. It fails with errors such as
@@ -2046,6 +2051,7 @@ private vulnerability reporting are on. A failure prints GitHub's error body and
 | `kubectl` hangs or times out | wrong kubeconfig, or the node pool is scaled to 0 | `source ~/gke-setup.env`; `kubectl config current-context`; check the node count |
 | `tofu` reports an authentication or quota-project error | the ADC login expired or has no quota project | repeat 2.5 |
 | zsh: `bad pattern` / `command not found: #` on a comment | interactive zsh does not ignore `#` comments by default | `setopt interactive_comments`, or paste without the comments |
+| `GraphQL: Could not resolve to a PullRequest with the number of N`, or `gh` acting on the wrong repository | `GH_REPO` from `~/gke-setup.env` names the template repository, and `gh` prefers it to the current directory | `unset GH_REPO`, or add `-R "<owner>/lodestar-infra"` to the command |
 
 ---
 
