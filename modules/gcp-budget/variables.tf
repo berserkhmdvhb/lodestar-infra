@@ -32,18 +32,21 @@ variable "display_name" {
 }
 
 variable "calendar_period" {
-  type    = string
-  default = "MONTH"
+  type        = string
+  description = "Budget period (MONTH, QUARTER or YEAR)."
+  default     = "MONTH"
 }
 
 variable "credit_types_treatment" {
-  type    = string
-  default = "INCLUDE_ALL_CREDITS"
+  type        = string
+  description = "How credits count towards the budget (for example INCLUDE_ALL_CREDITS)."
+  default     = "INCLUDE_ALL_CREDITS"
 }
 
 variable "currency_code" {
-  type    = string
-  default = "EUR"
+  type        = string
+  description = "ISO 4217 currency code of the amount; it must match the billing account."
+  default     = "EUR"
 }
 
 variable "amount_units" {
@@ -59,6 +62,7 @@ variable "threshold_percents" {
 }
 
 variable "spend_basis" {
-  type    = string
-  default = "CURRENT_SPEND"
+  type        = string
+  description = "Which spend the thresholds apply to (CURRENT_SPEND or FORECASTED_SPEND)."
+  default     = "CURRENT_SPEND"
 }

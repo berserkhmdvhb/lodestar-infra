@@ -1,15 +1,18 @@
 # One to one with the template's GitHub variables (platform-setup.md).
 
 output "GCP_PROJECT_ID" {
-  value = var.project_id
+  description = "Project ID, for the GCP_PROJECT_ID repository variable."
+  value       = var.project_id
 }
 
 output "GKE_CLUSTER" {
-  value = module.gke.cluster_name
+  description = "Cluster name, for the GKE_CLUSTER repository variable."
+  value       = module.gke.cluster_name
 }
 
 output "GKE_LOCATION" {
-  value = module.gke.location
+  description = "Cluster location, for the GKE_LOCATION repository variable."
+  value       = module.gke.location
 }
 
 output "GCP_WIF_PROVIDER" {

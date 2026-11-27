@@ -8,7 +8,7 @@ locals {
 resource "google_container_cluster" "this" {
   # checkov:skip=CKV_GCP_12:network policy is enforced by Dataplane V2, not the legacy add-on
   # checkov:skip=CKV_GCP_13:no client certificate is issued; the live master_auth is left as it is
-  # checkov:skip=CKV_GCP_20:authorized networks are not managed here; the DNS endpoint is the access path
+  # checkov:skip=CKV_GCP_20:master authorized networks are enabled on the live cluster but are not managed here; the DNS endpoint is the access path
   # checkov:skip=CKV_GCP_61:flow logs belong to the subnetwork (gcp-network); intranode visibility is not in the live cluster
   # checkov:skip=CKV_GCP_65:Google Groups for RBAC is not used
   # checkov:skip=CKV_GCP_66:Binary Authorization stays off until phase 11 (binary_authorization_mode)

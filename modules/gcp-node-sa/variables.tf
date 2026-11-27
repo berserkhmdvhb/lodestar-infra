@@ -4,13 +4,15 @@ variable "project_id" {
 }
 
 variable "account_id" {
-  type    = string
-  default = "gke-nodes"
+  type        = string
+  description = "Account ID (the part before the @) of the node service account."
+  default     = "gke-nodes"
 }
 
 variable "display_name" {
-  type    = string
-  default = "GKE nodes (apps)"
+  type        = string
+  description = "Display name of the node service account."
+  default     = "GKE nodes (apps)"
 }
 
 variable "use_default_node_role" {

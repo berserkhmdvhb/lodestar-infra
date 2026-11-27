@@ -69,21 +69,25 @@ variable "billing_account" {
 }
 
 variable "pool_id" {
-  type    = string
-  default = "github-infra"
+  type        = string
+  description = "ID of the workload identity pool."
+  default     = "github-infra"
 }
 
 variable "pool_display_name" {
-  type    = string
-  default = "GitHub Actions (infra CI)"
+  type        = string
+  description = "Display name of the workload identity pool."
+  default     = "GitHub Actions (infra CI)"
 }
 
 variable "provider_id" {
-  type    = string
-  default = "lodestar-infra"
+  type        = string
+  description = "ID of the planner OIDC provider."
+  default     = "lodestar-infra"
 }
 
 variable "provider_display_name" {
-  type    = string
-  default = "GitHub OIDC (infra CI)"
+  type        = string
+  description = "Display name of the planner OIDC provider."
+  default     = "GitHub OIDC (infra CI)"
 }

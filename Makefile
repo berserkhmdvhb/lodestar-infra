@@ -25,7 +25,7 @@ fmt:
 ifeq ($(ROOTS),)
 	@$(NO_ROOTS)
 else
-	@tofu fmt -check -recursive $(TF_DIRS)
+	@git ls-files -z -- $(TF_DIRS) | grep -zE '\.(tf|tftest\.hcl|tfmock\.hcl)$$' | xargs -0 tofu fmt -check
 endif
 
 validate:
@@ -64,7 +64,7 @@ else
 	@set -e; for d in $(ROOTS); do if [ -d "$$d/tests" ]; then echo "==> tofu test $$d"; \
 	  tofu -chdir="$$d" test; fi; done
 endif
-	@if grep -rn --include='*.tf' 'google_secret_manager_secret_version' $(TF_DIRS); then \
+	@if grep -rn --include='*.tf' --exclude-dir=.terraform 'google_secret_manager_secret_version' $(TF_DIRS); then \
 	  echo "secret values must never go through OpenTofu"; exit 1; fi
 	@bats tests/
 

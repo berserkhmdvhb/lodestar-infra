@@ -11,8 +11,9 @@ variable "project_number" {
 }
 
 variable "region" {
-  type    = string
-  default = "europe-west1"
+  type        = string
+  description = "Region of the provider and of the regional resources."
+  default     = "europe-west1"
 }
 
 variable "zone" {
@@ -62,8 +63,9 @@ variable "state_bucket" {
 }
 
 variable "state_prefix" {
-  type    = string
-  default = "envs/apps"
+  type        = string
+  description = "Prefix (folder) of this root's state inside the state bucket."
+  default     = "envs/apps"
 }
 
 variable "state_kms_key_id" {

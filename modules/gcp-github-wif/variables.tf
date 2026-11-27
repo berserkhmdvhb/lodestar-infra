@@ -60,23 +60,27 @@ variable "environments" {
 }
 
 variable "pool_id" {
-  type    = string
-  default = "github"
+  type        = string
+  description = "ID of the workload identity pool."
+  default     = "github"
 }
 
 variable "pool_display_name" {
-  type    = string
-  default = "GitHub Actions"
+  type        = string
+  description = "Display name of the workload identity pool."
+  default     = "GitHub Actions"
 }
 
 variable "provider_id" {
-  type    = string
-  default = "github-oidc"
+  type        = string
+  description = "ID of the main (deployer) OIDC provider."
+  default     = "github-oidc"
 }
 
 variable "provider_display_name" {
-  type    = string
-  default = "GitHub OIDC"
+  type        = string
+  description = "Display name of the main (deployer) OIDC provider."
+  default     = "GitHub OIDC"
 }
 
 variable "deployer_cluster_role" {
