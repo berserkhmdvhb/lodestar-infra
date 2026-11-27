@@ -668,6 +668,16 @@ differs from the guide's text, which assumes one cluster and the default project
 - Do not `source ~/gke-setup.env`. Name the project in every `gcloud` command, as below.
 - Do the namespace and priority class first, then the store for `cloudflared`, then the rest.
 
+Prerequisite, before any manifest of `deploy/cloudflared/` is applied: the connector must carry a zone spread, which
+older copies of the template lack. 🔍 From the template root:
+
+```bash
+grep -c 'topology.kubernetes.io/zone' deploy/cloudflared/deployment.yaml
+```
+
+Expect: `1`. If it prints `0`, the template checkout is too old: run `git switch phase-11` (or use the template's
+`main` once that work is merged) and check again. Do not go on with `0`: both replicas could land in one zone.
+
 ✏️ From the template root: the namespace, the priority class and the namespace's store.
 
 ```bash
@@ -706,8 +716,8 @@ kubectl -n cloudflared rollout status deployment/cloudflared --timeout=180s
 Expect: `condition met`, then `deployment "cloudflared" successfully rolled out`. If the wait times out:
 `kubectl -n cloudflared describe externalsecret tunnel-token`; a permission error means the grant of 6.3 is missing.
 
-The template's connector deployment spreads its replicas over nodes and over zones
-(`topology.kubernetes.io/zone`, `ScheduleAnyway`), so no patch is needed. Close its network:
+The connector spreads its replicas over nodes and zones through the constraint checked above (`ScheduleAnyway`), so no
+patch is needed. Close its network:
 
 ✏️
 
