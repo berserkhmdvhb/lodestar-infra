@@ -12,6 +12,7 @@
 # only a whole registered value, so a line is never cut; the redaction is a second layer.
 # The workflow sets REDACT_WIF_PROVIDER and REDACT_SA from the CI identity secrets.
 # The plan file and the log live in a temporary directory that is removed on exit and never uploaded.
+# The summary is redacted the same way (addresses can carry values as keys, and issue bodies are not masked).
 # Writes `exitcode=0` (no changes) or `exitcode=2` (changes) to $GITHUB_OUTPUT.
 # Env: CI_PLAN_DIR (default envs/apps).
 set -Eeuo pipefail
@@ -61,6 +62,6 @@ jq -r '
   "Plan: \(n(. == ["create"])) to add, \(n(. == ["update"])) to change, \(n(. == ["delete"])) to destroy, \(n(. == ["delete", "create"] or . == ["create", "delete"])) to replace.",
   "",
   (if ($c | length) == 0 then "No changes." else $c[] | "- `\(.address)`: \(.change.actions | join(", "))" end)
-' "$work/plan.json" >"$summary"
+' "$work/plan.json" | redact >"$summary"
 
 echo "exitcode=$code" >>"${GITHUB_OUTPUT:-/dev/null}"
