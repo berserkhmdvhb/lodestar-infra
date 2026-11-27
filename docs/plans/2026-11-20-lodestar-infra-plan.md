@@ -83,7 +83,36 @@
 - `modules/gcp-node-sa` (the minimal node roles);
 - `modules/gcp-registry` (Artifact Registry with immutable tags, cleanup policies and the reader binding);
 - `modules/gcp-github-wif` (the pool, the provider with the owner-ID and repository-ID condition, per-environment deployer service accounts with subject bindings, the registry writer role and the cluster viewer role).
-- [ ] **Tests:** the attribute condition includes both IDs; there's one service account per environment; no `roles/editor` or `roles/owner` is granted anywhere.
+- [x] **Tests:** the attribute condition includes both IDs; there's one service account per environment; no `roles/editor` or `roles/owner` is granted anywhere.
+
+**Executed (2026-11-27). Three reviewed dispatches, each clean on the first review; the controller's `make check` exits 0:**
+
+**L1.2a, `dfb063f`.** Each value matches the owner's live resources, and the optionals the owner never set stay unset:
+- **`gcp-project`:** the nine APIs, `disable_on_destroy = false`.
+- **`gcp-network`:**
+  - `apps-vpc`;
+  - `apps-subnet` with Private Google Access and `pods`/`services` in live order;
+  - `apps-router`;
+  - `apps-nat` (AUTO_ONLY, all subnets and ranges, logging `ERRORS_ONLY`);
+  - an optional proxy-only subnet, off by default.
+- **`gcp-node-sa`:** `gke-nodes` with `roles/container.defaultNodeServiceAccount`, or the four classic roles.
+- **`gcp-registry`:** off by default, since the template uses GHCR.
+
+**L1.2b, `581bc5a` (`gcp-github-wif`):**
+- the pool and the `github-oidc` provider;
+- the exact stored condition (owner ID, repo ID, `deploy|deploy-ops` on `main` or `v*`, with doubled backslashes);
+- `gh-deployer-<env>`, bound to `<sub_claim_prefix>:environment:<env>`, so it works with immutable subjects;
+- `roles/container.clusterViewer`, or a custom connect-only role;
+- no registry writer;
+- optional previews and drift per guide §12.5 and §12.6.
+
+**L1.2c, `8bb7f0e`:**
+- **`gcp-secrets`:** five conditional secretAccessor bindings (`eso-<ns>`), plus the seven empty secrets with user-managed replication in the region. A Makefile grep fails the build if a `google_secret_manager_secret_version` ever appears.
+- **`gcp-budget`:** optional; project filter, EUR amount, thresholds 0.5/0.9/1.0/1.5.
+
+**Tests:** 3 + 6 + 4 + 3 + 12 + 6 + 4 runs.
+
+**Deferred:** 10 minor findings, in the ledger for the phase review.
 
 ### Task L1.3: The GKE module
 **Files:** `modules/gcp-gke`. It creates a Standard zonal cluster with:
