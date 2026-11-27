@@ -31,7 +31,7 @@ variable "cluster_name" {
 
 variable "location" {
   type        = string
-  description = "Zone of the zonal cluster."
+  description = "Zone (zonal cluster) or region (regional cluster) of the cluster and its node pool."
   default     = "europe-west1-b"
 }
 
@@ -103,6 +103,16 @@ variable "maintenance_recurrence" {
   type        = string
   description = "RFC 5545 recurrence. Saturday and Sunday weekly gives 2 x 8 h, over the 48 h per 32 days GKE requires."
   default     = "FREQ=WEEKLY;BYDAY=SA,SU"
+
+  # A 32-day span holds at least 4 of each weekday: days x hours x 4 must reach 48. Checked for FREQ=WEEKLY;BYDAY=... only.
+  validation {
+    condition = !startswith(var.maintenance_recurrence, "FREQ=WEEKLY;BYDAY=") ? true : (
+      length(split(",", trimprefix(var.maintenance_recurrence, "FREQ=WEEKLY;BYDAY=")))
+      * try(one([for h in range(1, 25) : h if timecmp(timeadd(var.maintenance_start_time, "${h}h"), var.maintenance_end_time) == 0]), 0)
+      >= 12
+    )
+    error_message = "The weekly window must total at least 48 hours in 32 days: number of days x window hours (whole hours, up to 24) must be at least 12."
+  }
 }
 
 variable "node_pool_name" {
@@ -174,4 +184,36 @@ variable "security_posture_mode" {
     condition     = contains(["DISABLED", "BASIC"], var.security_posture_mode)
     error_message = "security_posture_mode must be DISABLED or BASIC (ENTERPRISE is paid)."
   }
+}
+
+variable "node_locations" {
+  type        = list(string)
+  description = "Zones of the node pool (and the cluster) for a regional location; null keeps the provider default."
+  default     = null
+}
+
+variable "location_policy" {
+  type        = string
+  description = "Autoscaler location policy: ANY (suits spot) or BALANCED (spreads on-demand nodes across zones)."
+  default     = "ANY"
+
+  validation {
+    condition     = contains(["ANY", "BALANCED"], var.location_policy)
+    error_message = "location_policy must be ANY or BALANCED."
+  }
+}
+
+variable "total_max_node_count" {
+  type        = number
+  description = "Total maximum node count across all zones. When set it replaces the per-zone maximum, and min_node_count becomes the total minimum (the provider forbids both kinds of limit together)."
+  default     = null
+}
+
+variable "oauth_scopes" {
+  type        = list(string)
+  description = "OAuth scopes of the node pool."
+  default = [
+    "https://www.googleapis.com/auth/cloud-platform",
+    "https://www.googleapis.com/auth/userinfo.email",
+  ]
 }

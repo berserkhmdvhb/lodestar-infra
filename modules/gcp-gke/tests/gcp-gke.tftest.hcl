@@ -339,3 +339,138 @@ run "security_posture_enterprise_is_refused" {
 
   expect_failures = [var.security_posture_mode]
 }
+
+# L4.1: new inputs. Defaults must render exactly what the live apps cluster has today.
+run "new_inputs_default_to_todays_values" {
+  command = plan
+
+  assert {
+    condition     = one(google_container_node_pool.this.autoscaling).location_policy == "ANY"
+    error_message = "location policy ANY by default"
+  }
+  assert {
+    condition = (
+      one(google_container_node_pool.this.autoscaling).min_node_count == 1
+      && one(google_container_node_pool.this.autoscaling).max_node_count == 3
+      && one(google_container_node_pool.this.autoscaling).total_min_node_count == null
+      && one(google_container_node_pool.this.autoscaling).total_max_node_count == null
+    )
+    error_message = "per-zone limits and no total limits by default"
+  }
+  assert {
+    condition     = length(coalesce(google_container_node_pool.this.node_locations, [])) == 0 && length(coalesce(google_container_cluster.this.node_locations, [])) == 0
+    error_message = "no node_locations by default"
+  }
+  assert {
+    condition     = google_container_node_pool.this.initial_node_count == 1
+    error_message = "initial_node_count equals min_node_count"
+  }
+  assert {
+    condition     = one(google_container_node_pool.this.node_config).oauth_scopes == toset(["https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/userinfo.email"])
+    error_message = "today's two oauth scopes"
+  }
+  assert {
+    condition = (
+      one(one(google_container_cluster.this.maintenance_policy).recurring_window).recurrence == "FREQ=WEEKLY;BYDAY=SA,SU"
+      && one(one(google_container_cluster.this.maintenance_policy).recurring_window).start_time == "2026-11-21T00:00:00Z"
+      && one(one(google_container_cluster.this.maintenance_policy).recurring_window).end_time == "2026-11-21T08:00:00Z"
+    )
+    error_message = "today's weekend window"
+  }
+}
+
+run "production_values_render" {
+  command = plan
+
+  variables {
+    cluster_name           = "prod"
+    location               = "europe-west1"
+    node_locations         = ["europe-west1-b", "europe-west1-c"]
+    location_policy        = "BALANCED"
+    total_max_node_count   = 6
+    min_node_count         = 2
+    spot                   = false
+    enable_public_endpoint = false
+    labels                 = { cluster = "prod" }
+    maintenance_start_time = "2026-12-01T00:00:00Z"
+    maintenance_end_time   = "2026-12-01T08:00:00Z"
+    maintenance_recurrence = "FREQ=WEEKLY;BYDAY=TU,WE"
+  }
+
+  assert {
+    condition = (
+      toset(google_container_node_pool.this.node_locations) == toset(["europe-west1-b", "europe-west1-c"])
+      && toset(google_container_cluster.this.node_locations) == toset(["europe-west1-b", "europe-west1-c"])
+      && google_container_node_pool.this.location == "europe-west1"
+    )
+    error_message = "regional location with two node zones"
+  }
+  assert {
+    condition = (
+      one(google_container_node_pool.this.autoscaling).location_policy == "BALANCED"
+      && one(google_container_node_pool.this.autoscaling).total_max_node_count == 6
+      && one(google_container_node_pool.this.autoscaling).total_min_node_count == 2
+      && one(google_container_node_pool.this.autoscaling).max_node_count == null
+      && one(google_container_node_pool.this.autoscaling).min_node_count == null
+    )
+    error_message = "total limits replace the per-zone limits (the provider forbids both)"
+  }
+  assert {
+    condition     = google_container_node_pool.this.initial_node_count == 2
+    error_message = "initial_node_count follows min_node_count"
+  }
+  assert {
+    condition = (
+      one(one(google_container_cluster.this.maintenance_policy).recurring_window).recurrence == "FREQ=WEEKLY;BYDAY=TU,WE"
+      && one(one(google_container_cluster.this.maintenance_policy).recurring_window).start_time == "2026-12-01T00:00:00Z"
+    )
+    error_message = "Tuesday and Wednesday window"
+  }
+  assert {
+    condition     = one(one(google_container_cluster.this.control_plane_endpoints_config).ip_endpoints_config).enabled == false
+    error_message = "production has no public IP endpoint"
+  }
+}
+
+run "oauth_scopes_can_be_set" {
+  command = plan
+
+  variables {
+    oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
+
+  assert {
+    condition     = one(google_container_node_pool.this.node_config).oauth_scopes == toset(["https://www.googleapis.com/auth/cloud-platform"])
+    error_message = "scopes follow the variable"
+  }
+}
+
+run "location_policy_other_value_refused" {
+  command = plan
+
+  variables {
+    location_policy = "SPREAD"
+  }
+
+  expect_failures = [var.location_policy]
+}
+
+run "maintenance_window_under_48h_per_32_days_refused" {
+  command = plan
+
+  variables {
+    maintenance_recurrence = "FREQ=WEEKLY;BYDAY=SA"
+  }
+
+  expect_failures = [var.maintenance_recurrence]
+}
+
+run "maintenance_window_tuesday_wednesday_accepted" {
+  command = plan
+
+  variables {
+    maintenance_start_time = "2026-12-01T00:00:00Z"
+    maintenance_end_time   = "2026-12-01T08:00:00Z"
+    maintenance_recurrence = "FREQ=WEEKLY;BYDAY=TU,WE"
+  }
+}

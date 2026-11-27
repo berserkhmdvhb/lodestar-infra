@@ -1,10 +1,3 @@
-locals {
-  oauth_scopes = [
-    "https://www.googleapis.com/auth/cloud-platform",
-    "https://www.googleapis.com/auth/userinfo.email",
-  ]
-}
-
 resource "google_container_cluster" "this" {
   # checkov:skip=CKV_GCP_12:network policy is enforced by Dataplane V2, not the legacy add-on
   # checkov:skip=CKV_GCP_13:no client certificate is issued; the live master_auth is left as it is
@@ -17,6 +10,8 @@ resource "google_container_cluster" "this" {
   name     = var.cluster_name
   project  = var.project_id
   location = var.location
+
+  node_locations = var.node_locations
 
   network    = var.network
   subnetwork = var.subnetwork
@@ -124,10 +119,16 @@ resource "google_container_node_pool" "this" {
   location = var.location
   cluster  = google_container_cluster.this.name
 
+  node_locations     = var.node_locations
+  initial_node_count = var.min_node_count
+
+  # The provider forbids per-zone and total limits together: a total maximum turns min_node_count into the total minimum.
   autoscaling {
-    min_node_count  = var.min_node_count
-    max_node_count  = var.max_node_count
-    location_policy = "ANY"
+    min_node_count       = var.total_max_node_count == null ? var.min_node_count : null
+    max_node_count       = var.total_max_node_count == null ? var.max_node_count : null
+    total_min_node_count = var.total_max_node_count == null ? null : var.min_node_count
+    total_max_node_count = var.total_max_node_count
+    location_policy      = var.location_policy
   }
 
   management {
@@ -147,7 +148,7 @@ resource "google_container_node_pool" "this" {
     image_type      = "COS_CONTAINERD"
     spot            = var.spot
     service_account = var.node_service_account
-    oauth_scopes    = local.oauth_scopes
+    oauth_scopes    = var.oauth_scopes
     metadata        = { "disable-legacy-endpoints" = "true" }
     resource_labels = var.labels
 
