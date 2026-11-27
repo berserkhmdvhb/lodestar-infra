@@ -64,6 +64,8 @@ A block with several marks changes things in the order shown.
      `echo` interprets them, so a correct value looks wrong.
   3. **Comments.** An interactive zsh does not ignore `# comment` by default. Run `setopt interactive_comments`
      once in the terminal, or leave the comments out when you paste.
+- **No comments in code blocks.** Code blocks contain no comments, so they paste safely into any zsh (where
+  `#` is not a comment by default); the explanations live in the text around them.
 - **Never paste prose.** A sentence copied into the shell is run as a command. It fails with errors such as
   `Excess arguments.` or `command not found`, and the next lines may still run. Copy only the code block.
 - **Saved plans.** OpenTofu plans are saved to a file (`-out=...`), reviewed, and applied by that file. The file

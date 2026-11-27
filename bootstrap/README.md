@@ -22,8 +22,10 @@ Nothing in this repository applies anything automatically. You run every command
 ## 1. Variables
 
 ```bash
-cp terraform.tfvars.example terraform.tfvars   # git-ignored; never commit it
+cp terraform.tfvars.example terraform.tfvars
 ```
+
+The copy is git-ignored; never commit it.
 
 Edit `terraform.tfvars`: at least `project_id` and a globally unique `state_bucket_name`.
 
@@ -52,11 +54,13 @@ Other roots copy the final shape from `encryption.example.tf.txt`, with the key 
 ## 4. Verify
 
 ```bash
-source ~/gke-setup.env   # defines PROJECT_ID; or export it yourself
+source ~/gke-setup.env
 BUCKET="$(tofu -chdir=bootstrap output -raw state_bucket)"
 gcloud storage buckets describe "gs://${BUCKET}" --project "${PROJECT_ID}" \
   --format='yaml(versioning,uniform_bucket_level_access,public_access_prevention,retention_policy)'
 ```
+
+`source ~/gke-setup.env` defines `PROJECT_ID`; or export `PROJECT_ID` yourself.
 
 Expect `versioning.enabled: true`, uniform access enabled, `public_access_prevention: enforced` and
 no `retention_policy`. An object under `bootstrap/` in the bucket should not be readable as plain text.

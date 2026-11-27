@@ -20,11 +20,13 @@ cluster the control plane is unavailable meanwhile (see step 3). Pick a quiet wi
 
 ```bash
 export PATH="${PWD}/.tools/bin:${PATH}"
-source ~/gke-setup.env                         # PROJECT_ID, PROJECT_NUMBER, REGION, ZONE, CLUSTER
+source ~/gke-setup.env
 gcloud auth application-default login
 gcloud auth application-default set-quota-project "${PROJECT_ID}"
 printf 'project=%s region=%s zone=%s\n' "${PROJECT_ID}" "${REGION}" "${ZONE}"
 ```
+
+The env file defines `PROJECT_ID`, `PROJECT_NUMBER`, `REGION`, `ZONE` and `CLUSTER`.
 
 `envs/apps/terraform.tfvars` from the import runbook must still be there. Then `tofu -chdir=envs/apps init`.
 

@@ -12,13 +12,16 @@ must say it imports and creates, replaces and destroys nothing.
 ```bash
 make tools
 export PATH="${PWD}/.tools/bin:${PATH}"
-tofu version                                   # OpenTofu v1.13.9
+tofu version
 
-source ~/gke-setup.env                         # PROJECT_ID, PROJECT_NUMBER, REGION, ZONE, GH_*, SUB_PREFIX
+source ~/gke-setup.env
 gcloud auth application-default login
 gcloud auth application-default set-quota-project "${PROJECT_ID}"
 printf 'project=%s region=%s zone=%s\n' "${PROJECT_ID}" "${REGION}" "${ZONE}"
 ```
+
+Expect `OpenTofu v1.13.9`. The env file defines `PROJECT_ID`, `PROJECT_NUMBER`, `REGION`, `ZONE`, `GH_*` and
+`SUB_PREFIX`.
 
 The budget's id, billing account and name come from your live export (`name` has the form
 `billingAccounts/<account>/budgets/<id>`):
