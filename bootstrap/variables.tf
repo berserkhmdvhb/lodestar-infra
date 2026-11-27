@@ -17,6 +17,11 @@ variable "state_bucket_name" {
     condition     = can(regex("^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$", var.state_bucket_name))
     error_message = "state_bucket_name must be 3-63 characters: lowercase letters, digits, '-', '_' or '.', starting and ending with a letter or digit."
   }
+
+  validation {
+    condition     = !strcontains(var.state_bucket_name, "..")
+    error_message = "state_bucket_name must not contain two consecutive dots."
+  }
 }
 
 variable "kms_key_ring_name" {
@@ -35,6 +40,11 @@ variable "kms_rotation_period" {
   type        = string
   description = "Automatic key rotation period, in seconds (default 90 days)."
   default     = "7776000s"
+
+  validation {
+    condition     = can(regex("^[0-9]+s$", var.kms_rotation_period)) && tonumber(trimsuffix(var.kms_rotation_period, "s")) >= 86400
+    error_message = "kms_rotation_period must be whole seconds with an 's' suffix (for example 7776000s) and at least 86400s (one day)."
+  }
 }
 
 variable "bucket_cmek_enabled" {
@@ -58,10 +68,20 @@ variable "noncurrent_versions_kept" {
   type        = number
   description = "Newer versions that must exist before an old version may be deleted."
   default     = 20
+
+  validation {
+    condition     = var.noncurrent_versions_kept > 0
+    error_message = "noncurrent_versions_kept must be positive."
+  }
 }
 
 variable "noncurrent_days" {
   type        = number
   description = "Days a version must have been noncurrent before it may be deleted."
   default     = 90
+
+  validation {
+    condition     = var.noncurrent_days > 0
+    error_message = "noncurrent_days must be positive."
+  }
 }

@@ -1,0 +1,15 @@
+# Copied into a scratch copy of envs/apps by tests/envs-apps.bats: the modules with all defaults,
+# so the "import_lists_equal_the_module_defaults" run can compare them with the lists envs/apps
+# writes out for imports.tf.
+module "defaults_project" {
+  source = "../../modules/gcp-project"
+
+  project_id = var.project_id
+}
+
+module "defaults_secrets" {
+  source = "../../modules/gcp-secrets"
+
+  project_id     = var.project_id
+  project_number = var.project_number
+}

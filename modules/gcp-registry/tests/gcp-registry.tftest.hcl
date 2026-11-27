@@ -80,3 +80,25 @@ run "readers_only_get_reader_role" {
     error_message = "reader role only; no writer"
   }
 }
+
+run "all_users_reader_rejected" {
+  command = plan
+
+  variables {
+    enabled        = true
+    reader_members = ["allUsers"]
+  }
+
+  expect_failures = [var.reader_members]
+}
+
+run "all_authenticated_users_reader_rejected" {
+  command = plan
+
+  variables {
+    enabled        = true
+    reader_members = ["allAuthenticatedUsers"]
+  }
+
+  expect_failures = [var.reader_members]
+}
