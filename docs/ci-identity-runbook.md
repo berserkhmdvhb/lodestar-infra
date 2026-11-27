@@ -5,7 +5,7 @@ Commands work in bash and zsh. Run them from the repository root, in the same te
 
 What this does: gives this repository's CI a read-only, keyless identity, so that:
 
-- every pull request that touches `envs/`, `modules/` or the plan workflow shows a plan summary in its job
+- every pull request that touches `envs/apps/`, `modules/` or the plan workflow shows a plan summary in its job
   summary (`plan.yml`);
 - a weekly run (Monday 06:00 UTC, or on demand) plans `main` and opens one issue "Drift detected in
   envs/apps" when the live project differs from the code (`drift.yml`). It closes that issue when the drift is gone.
@@ -196,13 +196,13 @@ set_secret TF_STATE_BUCKET state_bucket
 set_secret TF_STATE_KMS_KEY_ID state_kms_key_id
 ```
 
-Check that all sixteen secrets exist (names only):
+Check that all sixteen apps secrets exist (names only; once section 9 is done the list also holds the 12 `TF_PROD_*` secrets, 28 in total):
 
 ```bash
 gh secret list --repo "${LODESTAR_REPO}" | cut -f1 | sort
 ```
 
-Expect these 16 names: `GCP_CI_SA`, `GCP_CI_WIF_PROVIDER`, `TF_BILLING_ACCOUNT`, `TF_BUDGET_DISPLAY_NAME`,
+Expect these 16 names (plus the `TF_PROD_*` ones after section 9): `GCP_CI_SA`, `GCP_CI_WIF_PROVIDER`, `TF_BILLING_ACCOUNT`, `TF_BUDGET_DISPLAY_NAME`,
 `TF_BUDGET_ID`, `TF_CI_GITHUB_REPO_ID`, `TF_CI_GITHUB_REPOSITORY`, `TF_CI_SUB_CLAIM_PREFIX`,
 `TF_GITHUB_OWNER_ID`, `TF_GITHUB_REPO_ID`, `TF_GITHUB_REPOSITORY`, `TF_PROJECT_ID`, `TF_PROJECT_NUMBER`,
 `TF_STATE_BUCKET`, `TF_STATE_KMS_KEY_ID`, `TF_SUB_CLAIM_PREFIX`.
@@ -233,8 +233,8 @@ Expect: the run succeeds, its job summary says `Plan: 0 to add, 0 to change, 0 t
 `No changes.`, and no drift issue is opened. A permission error right after the apply can be IAM propagation:
 wait a few minutes and run it again.
 
-A pull request that touches `envs/`, `modules/`, `scripts/ci-plan.sh` or `plan.yml` now shows its plan
-summary in the job summary of the `Plan` workflow.
+A pull request that touches `envs/apps/`, `modules/`, `scripts/ci-plan.sh`, `scripts/ci-changed.sh` or `plan.yml` now
+shows its plan summary in the job summary of the `Plan` workflow (the apps job; the production job is section 9).
 
 ## 8. Rollback
 
@@ -279,9 +279,15 @@ Apply `envs/prod` first (its own runbook), then set these. Where each value come
 | `TF_PROD_STATE_BUCKET` | secret | `bootstrap/prod` output `state_bucket` (also tfvars `state_bucket`) |
 | `TF_PROD_STATE_KMS_KEY_ID` | secret | `bootstrap/prod` output `kms_key_id` (also tfvars `state_kms_key_id`) |
 | `TF_PROD_REGION` | variable | tfvars, `region` (the region is not identifying) |
+| `TF_PROD_NODE_LOCATIONS` | variable | tfvars, `node_locations` as a JSON list |
 
-The planner is not tied to any `apps` value. `node_locations`, `budget_display_name` and `state_prefix` keep their
-defaults in CI; if you changed one in tfvars, the plan differs from yours.
+The planner is not tied to any `apps` value. `TF_PROD_NODE_LOCATIONS` is a variable holding a JSON list of zones, for
+example `["europe-west1-b","europe-west1-c"]` (it must equal `node_locations` in your tfvars). `budget_display_name`
+and `state_prefix` must keep their defaults, because CI cannot set them. A different `state_prefix` makes CI plan
+against an empty state: a full create plan and a drift issue listing every address.
+
+Choose generic service keys in `services` (for example `site`, not a project's real name): the keys appear in resource
+addresses and in the pool IDs `gh-<key>`, and they are not masked.
 
 Set the two outputs without printing them. `GH_REPO` must be unset first, or `gh` targets another repository:
 
@@ -323,6 +329,11 @@ sed -n 's/^region *= *"\(.*\)"$/\1/p' envs/prod/terraform.tfvars | head -n 1 | t
 ```
 
 If `region` is not in the tfvars, the default is `europe-west1`: set it with `gh variable set TF_PROD_REGION --body europe-west1 -R "${LODESTAR_REPO}"`.
+The zones (not identifying):
+
+```bash
+gh variable set TF_PROD_NODE_LOCATIONS --body '["europe-west1-b","europe-west1-c"]' -R "${LODESTAR_REPO}"
+```
 
 Check the names (never the values):
 
@@ -331,7 +342,7 @@ gh secret list -R "${LODESTAR_REPO}" | cut -f1 | grep '^TF_PROD_' | sort
 gh variable list -R "${LODESTAR_REPO}" | cut -f1 | grep '^TF_PROD_'
 ```
 
-Expect 12 secrets and 1 variable.
+Expect 12 secrets and 2 variables.
 
 How the logs stay clean: every value is a secret, so GitHub masks it. For `TF_PROD_SERVICES` the job also parses the JSON
 with `jq` before any `tofu` command and registers every string and number in it with `::add-mask::`, plus the owner
@@ -357,12 +368,28 @@ read from the tfvars file and never printed; `grep -F -f` reads the patterns fro
 RUN_ID="$(gh run list --workflow drift.yml -R "${LODESTAR_REPO}" --limit 1 --json databaseId --jq '.[0].databaseId')"
 gh run view "${RUN_ID}" -R "${LODESTAR_REPO}" --log > "${TMPDIR:-/tmp}/prod-run.log"
 {
-  sed -n 's/^[a-z_]* *= *"\([^"]\{3,\}\)"$/\1/p' envs/prod/terraform.tfvars
-  printf 'jsonencode(var.services)' | tofu -chdir=envs/prod console | jq -r '.. | strings | select(length > 2)'
+  sed -n -e '/^region /d' -e 's/^[a-z_]* *= *"\([^"]\{3,\}\)"$/\1/p' envs/prod/terraform.tfvars
+  printf 'jsonencode(var.services)' | tofu -chdir=envs/prod console | jq -r . | jq -r '.. | strings | select(length > 2) | (., (select(test("^[^/]+/[^/]+$")) | split("/")[]))'
 } | grep -F -f - -c "${TMPDIR:-/tmp}/prod-run.log"
 rm -f "${TMPDIR:-/tmp}/prod-run.log"
 ```
 
 Expect `0`. Any other number is a leak: delete the run (`gh run delete`), rotate what leaked, and fix the masking before
-the next run. A match on `region` or a similar non-identifying value would also count, so remove those lines from the
-tfvars copy if the count is not 0 and look only at identifiers.
+the next run. The `region` line is left out because the plan step always prints it (it is not identifying). A dotted
+repository name appears regex-escaped (`\\.`) inside the provider's attribute condition, so an error line quoting that
+condition is masked on the escaped form only if the job registered it: the job masks the plain and the escaped forms,
+and the scan above would not find the escaped one, so also run `grep -c` for each dotted name written with `\.`.
+
+### Rollback of the production planner
+
+Delete the 12 secrets and the 2 variables:
+
+```bash
+for name in TF_PROD_CI_WIF_PROVIDER TF_PROD_CI_SA TF_PROD_PROJECT_ID TF_PROD_PROJECT_NUMBER TF_PROD_BILLING_ACCOUNT TF_PROD_SERVICES TF_PROD_CI_GITHUB_REPOSITORY TF_PROD_CI_GITHUB_OWNER_ID TF_PROD_CI_GITHUB_REPO_ID TF_PROD_CI_SUB_CLAIM_PREFIX TF_PROD_STATE_BUCKET TF_PROD_STATE_KMS_KEY_ID; do
+  gh secret delete "${name}" -R "${LODESTAR_REPO}"
+done
+gh variable delete TF_PROD_REGION -R "${LODESTAR_REPO}"
+gh variable delete TF_PROD_NODE_LOCATIONS -R "${LODESTAR_REPO}"
+```
+
+The production jobs then skip with the "not configured yet" notice.
