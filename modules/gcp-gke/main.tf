@@ -88,6 +88,21 @@ resource "google_container_cluster" "this" {
     }
   }
 
+  rbac_binding_config {
+    enable_insecure_binding_system_unauthenticated = var.enable_insecure_binding_system_unauthenticated
+    enable_insecure_binding_system_authenticated   = var.enable_insecure_binding_system_authenticated
+  }
+
+  # Free tier only. vulnerability_mode is left unset: GKE removed workload vulnerability scanning.
+  security_posture_config {
+    mode = var.security_posture_mode
+  }
+
+  database_encryption {
+    state    = var.database_encryption_key == null ? "DECRYPTED" : "ENCRYPTED"
+    key_name = var.database_encryption_key
+  }
+
   dynamic "binary_authorization" {
     for_each = var.binary_authorization_mode == null ? [] : [var.binary_authorization_mode]
     content {

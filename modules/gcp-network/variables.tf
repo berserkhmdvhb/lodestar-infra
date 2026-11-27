@@ -62,3 +62,30 @@ variable "proxy_only_cidr" {
   type    = string
   default = "10.129.0.0/23"
 }
+
+variable "enable_flow_logs" {
+  type        = bool
+  description = "VPC flow logs on the node subnet."
+  default     = true
+}
+
+variable "flow_log_aggregation_interval" {
+  type    = string
+  default = "INTERVAL_10_MIN"
+}
+
+variable "flow_log_sampling" {
+  type        = number
+  description = "Share of flows that are logged (0 to 1)."
+  default     = 0.1
+
+  validation {
+    condition     = var.flow_log_sampling >= 0 && var.flow_log_sampling <= 1
+    error_message = "flow_log_sampling must be between 0 and 1."
+  }
+}
+
+variable "flow_log_metadata" {
+  type    = string
+  default = "INCLUDE_ALL_METADATA"
+}

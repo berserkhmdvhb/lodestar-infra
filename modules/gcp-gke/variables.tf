@@ -135,3 +135,32 @@ variable "spot" {
   description = "Run the pool on spot VMs."
   default     = true
 }
+
+variable "enable_insecure_binding_system_unauthenticated" {
+  type        = bool
+  description = "Allow RBAC bindings to system:anonymous and system:unauthenticated."
+  default     = false
+}
+
+variable "enable_insecure_binding_system_authenticated" {
+  type        = bool
+  description = "Allow RBAC bindings to system:authenticated."
+  default     = false
+}
+
+variable "database_encryption_key" {
+  type        = string
+  description = "Cloud KMS key id for application-layer Secrets encryption; null leaves Secrets DECRYPTED."
+  default     = null
+}
+
+variable "security_posture_mode" {
+  type        = string
+  description = "Security posture mode. BASIC is free; ENTERPRISE is paid and refused here."
+  default     = "BASIC"
+
+  validation {
+    condition     = contains(["DISABLED", "BASIC"], var.security_posture_mode)
+    error_message = "security_posture_mode must be DISABLED or BASIC (ENTERPRISE is paid)."
+  }
+}

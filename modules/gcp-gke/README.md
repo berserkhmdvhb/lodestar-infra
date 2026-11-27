@@ -11,7 +11,7 @@ node service account, and labels. Binary Authorization is off until `binary_auth
 
 Inputs: `project_id`, `network`, `subnetwork`, `node_service_account` (required; the default compute
 account is refused), and defaults for the cluster, zone, channel, ranges, maintenance window, labels, pool
-name, machine, disk, node counts and `spot`. Outputs: `cluster_name`, `location`, `dns_endpoint`.
+name, machine, disk, node counts and `spot`, and the security inputs below. Outputs: `cluster_name`, `location`, `dns_endpoint`.
 
 ## Built to be imported
 
@@ -24,3 +24,19 @@ owns it) and `initial_node_count` (create-only). `deletion_protection` is a prov
 
 The provider marks `remove_default_node_pool` deprecated for cluster versions 1.36.4 and later; plans show
 that warning until the module moves to the node-pool-free form.
+
+## Security baseline (task L1.4)
+
+All in-place changes on the live cluster, each behind a variable whose default is the hardened value:
+
+- `rbac_binding_config`: bindings to `system:anonymous`, `system:unauthenticated` and
+  `system:authenticated` are refused (`enable_insecure_binding_system_unauthenticated` and
+  `enable_insecure_binding_system_authenticated`, both false).
+- `database_encryption`: application-layer Secrets encryption with `database_encryption_key` (the
+  `key_id` output of `gcp-gke-secrets-key`). Null leaves Secrets DECRYPTED.
+- `security_posture_config`: mode `BASIC` (free). Enterprise is paid and refused. `vulnerability_mode` is
+  left unset: GKE shut down workload vulnerability scanning (container OS scanning on July 31, 2025,
+  advanced insights on June 16, 2026), so there is no free tier left to set.
+
+Deferred, not in this task: the node pool's OAuth scopes (`cloud-platform`) and spot to on-demand. Both
+force a new node pool, so they wait for one planned pool swap before go-live.

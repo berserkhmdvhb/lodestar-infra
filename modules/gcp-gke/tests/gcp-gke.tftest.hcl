@@ -266,3 +266,76 @@ run "outputs" {
     error_message = "cluster name and location outputs"
   }
 }
+
+run "insecure_rbac_bindings_are_off_by_default" {
+  command = plan
+
+  assert {
+    condition = (
+      one(google_container_cluster.this.rbac_binding_config).enable_insecure_binding_system_unauthenticated == false
+      && one(google_container_cluster.this.rbac_binding_config).enable_insecure_binding_system_authenticated == false
+    )
+    error_message = "both insecure RBAC binding switches must default to false"
+  }
+}
+
+run "insecure_rbac_bindings_can_be_allowed" {
+  command = plan
+
+  variables {
+    enable_insecure_binding_system_unauthenticated = true
+    enable_insecure_binding_system_authenticated   = true
+  }
+
+  assert {
+    condition = (
+      one(google_container_cluster.this.rbac_binding_config).enable_insecure_binding_system_unauthenticated == true
+      && one(google_container_cluster.this.rbac_binding_config).enable_insecure_binding_system_authenticated == true
+    )
+    error_message = "the switches must follow the variables"
+  }
+}
+
+run "secrets_are_decrypted_without_a_key" {
+  command = plan
+
+  assert {
+    condition     = one(google_container_cluster.this.database_encryption).state == "DECRYPTED"
+    error_message = "no key: DECRYPTED (what the import found)"
+  }
+}
+
+run "secrets_are_encrypted_with_a_key" {
+  command = plan
+
+  variables {
+    database_encryption_key = "projects/your-project-id/locations/europe-west1/keyRings/gke/cryptoKeys/secrets"
+  }
+
+  assert {
+    condition = (
+      one(google_container_cluster.this.database_encryption).state == "ENCRYPTED"
+      && one(google_container_cluster.this.database_encryption).key_name == "projects/your-project-id/locations/europe-west1/keyRings/gke/cryptoKeys/secrets"
+    )
+    error_message = "a key: ENCRYPTED with that key"
+  }
+}
+
+run "security_posture_is_basic" {
+  command = plan
+
+  assert {
+    condition     = one(google_container_cluster.this.security_posture_config).mode == "BASIC"
+    error_message = "security posture mode BASIC"
+  }
+}
+
+run "security_posture_enterprise_is_refused" {
+  command = plan
+
+  variables {
+    security_posture_mode = "ENTERPRISE"
+  }
+
+  expect_failures = [var.security_posture_mode]
+}

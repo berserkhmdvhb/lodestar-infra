@@ -7,13 +7,21 @@ resource "google_compute_network" "this" {
 }
 
 resource "google_compute_subnetwork" "this" {
-  # checkov:skip=CKV_GCP_26:flow logs are added in task L1.4; an import must not change the live subnet
   project                  = var.project_id
   name                     = var.subnet_name
   region                   = var.region
   network                  = google_compute_network.this.id
   ip_cidr_range            = var.subnet_cidr
   private_ip_google_access = true
+
+  dynamic "log_config" {
+    for_each = var.enable_flow_logs ? [1] : []
+    content {
+      aggregation_interval = var.flow_log_aggregation_interval
+      flow_sampling        = var.flow_log_sampling
+      metadata             = var.flow_log_metadata
+    }
+  }
 
   secondary_ip_range {
     range_name    = "pods"

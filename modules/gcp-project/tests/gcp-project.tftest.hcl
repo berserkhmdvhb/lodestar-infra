@@ -45,3 +45,33 @@ run "services_can_be_overridden" {
     error_message = "one resource per service"
   }
 }
+
+run "container_audit_logs_are_admin_read_and_data_write_only" {
+  command = plan
+
+  assert {
+    condition     = google_project_iam_audit_config.container[0].service == "container.googleapis.com"
+    error_message = "the audit config is for the container API"
+  }
+  assert {
+    condition     = toset([for c in google_project_iam_audit_config.container[0].audit_log_config : c.log_type]) == toset(["ADMIN_READ", "DATA_WRITE"])
+    error_message = "exactly ADMIN_READ and DATA_WRITE; DATA_READ would flood Logging"
+  }
+  assert {
+    condition     = length(google_project_iam_audit_config.container[0].audit_log_config) == 2
+    error_message = "two audit_log_config entries"
+  }
+}
+
+run "container_audit_config_can_be_disabled" {
+  command = plan
+
+  variables {
+    enable_container_audit_logs = false
+  }
+
+  assert {
+    condition     = length(google_project_iam_audit_config.container) == 0
+    error_message = "nothing when disabled"
+  }
+}

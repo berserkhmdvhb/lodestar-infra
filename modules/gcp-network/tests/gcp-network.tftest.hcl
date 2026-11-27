@@ -50,10 +50,6 @@ run "subnet_has_pga_and_secondary_ranges" {
     )
     error_message = "secondary ranges: pods then services with the guide CIDRs"
   }
-  assert {
-    condition     = length(google_compute_subnetwork.this.log_config) == 0
-    error_message = "no flow logs here"
-  }
 }
 
 run "nat_covers_all_subnets_and_logs_errors" {
@@ -125,5 +121,31 @@ run "outputs_expose_names" {
   assert {
     condition     = output.network_name == "apps-vpc" && output.subnet_name == "apps-subnet"
     error_message = "network and subnet names"
+  }
+}
+
+run "subnet_flow_logs_are_on_and_sampled" {
+  command = plan
+
+  assert {
+    condition = (
+      one(google_compute_subnetwork.this.log_config).aggregation_interval == "INTERVAL_10_MIN"
+      && one(google_compute_subnetwork.this.log_config).flow_sampling == 0.1
+      && one(google_compute_subnetwork.this.log_config).metadata == "INCLUDE_ALL_METADATA"
+    )
+    error_message = "flow logs: 10 minutes, 10 percent, all metadata"
+  }
+}
+
+run "subnet_flow_logs_can_be_disabled" {
+  command = plan
+
+  variables {
+    enable_flow_logs = false
+  }
+
+  assert {
+    condition     = length(google_compute_subnetwork.this.log_config) == 0
+    error_message = "no log_config when disabled"
   }
 }

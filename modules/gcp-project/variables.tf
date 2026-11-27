@@ -18,3 +18,9 @@ variable "services" {
     "secretmanager.googleapis.com",
   ]
 }
+
+variable "enable_container_audit_logs" {
+  type        = bool
+  description = "Data Access audit logs (ADMIN_READ and DATA_WRITE) for the container API."
+  default     = true
+}

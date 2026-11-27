@@ -6,3 +6,20 @@ resource "google_project_service" "this" {
   disable_on_destroy         = false
   disable_dependent_services = false
 }
+
+# Authoritative for container.googleapis.com only. Writes to Kubernetes objects are already in the
+# always-on Admin Activity logs; the read data type is left out on purpose (every get, list and watch would be logged).
+resource "google_project_iam_audit_config" "container" {
+  count = var.enable_container_audit_logs ? 1 : 0
+
+  project = var.project_id
+  service = "container.googleapis.com"
+
+  audit_log_config {
+    log_type = "ADMIN_READ"
+  }
+
+  audit_log_config {
+    log_type = "DATA_WRITE"
+  }
+}
