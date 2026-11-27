@@ -15,6 +15,9 @@ resource "google_project_iam_audit_config" "container" {
   project = var.project_id
   service = "container.googleapis.com"
 
+  # The IAM policy call needs the Resource Manager API, which a new project does not have until services are enabled.
+  depends_on = [google_project_service.this]
+
   audit_log_config {
     log_type = "ADMIN_READ"
   }

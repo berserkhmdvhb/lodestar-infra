@@ -57,6 +57,9 @@ resource "google_service_account_iam_member" "wif" {
   service_account_id = google_service_account.planner.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principal://iam.googleapis.com/${local.pool_name}/subject/${each.value}"
+
+  # A principal:// member is rejected until its pool exists.
+  depends_on = [google_iam_workload_identity_pool.ci]
 }
 
 resource "google_project_iam_member" "planner" {

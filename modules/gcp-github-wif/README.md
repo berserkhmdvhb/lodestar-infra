@@ -31,6 +31,12 @@ modifier): write `${VAR}:environment`.
 Inputs: `project_id`, `project_number`, `github_repository`, `github_owner_id`, `github_repo_id`,
 `sub_claim_prefix` (all required), `environments`, `pool_id`, `pool_display_name`, `provider_id`,
 `provider_display_name`, `deployer_cluster_role`, `create_custom_connect_role`, `enable_previews`,
-`enable_drift`.
+`enable_drift`, `allowed_environment` (also pins `assertion.environment` in the main provider; default
+`null`), `deployer_account_ids` (service account ID per environment; default `gh-deployer-<env>`).
+The module serves one repository. For several, call it once per repository with its own `pool_id`. Some names are
+project-wide, so every call in one project must follow these rules: pass `environments = ["production"]`; give each
+call a unique `deployer_account_ids` entry; let at most one call set `create_custom_connect_role` (the role
+`gkeDnsConnect`); keep `enable_previews` and `enable_drift` off (`gh-deployer-preview`, `gh-drift-<env>`; refused
+while `allowed_environment` is set). Every deployer ID, default or given, is validated to 6 to 30 characters.
 Outputs: `workload_identity_provider`, `deployer_emails`, `preview_workload_identity_provider`,
 `drift_workload_identity_providers`.

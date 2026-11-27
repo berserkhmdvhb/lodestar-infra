@@ -20,7 +20,9 @@ updates:
   - package-ecosystem: opentofu
     directories:
       - /bootstrap
+      - /bootstrap/prod
       - /envs/apps
+      - /envs/prod
       - /modules/*
     schedule:
       interval: weekly

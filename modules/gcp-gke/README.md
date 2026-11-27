@@ -11,7 +11,10 @@ node service account, and labels. Binary Authorization is off until `binary_auth
 
 Inputs: `project_id`, `network`, `subnetwork`, `node_service_account` (required; the default compute
 account is refused), and defaults for the cluster, zone, channel, ranges, maintenance window, labels, pool
-name, machine, disk, node counts and `spot`, and the security inputs below. Outputs: `cluster_name`, `location`, `dns_endpoint`.
+name, machine, disk, node counts and `spot`, and the security inputs below. For a regional cluster:
+`node_locations`, `location_policy` (`ANY` or `BALANCED`), and `oauth_scopes`; defaults keep the zonal `apps` cluster.
+`min_node_count` and `max_node_count` are per zone; `min_node_count` is also `initial_node_count` (per zone,
+create-only, ignored afterwards). The maintenance window's start date must fall on a weekday listed in the recurrence. Outputs: `cluster_name`, `location`, `dns_endpoint`.
 
 ## Built to be imported
 

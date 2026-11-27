@@ -15,6 +15,9 @@ locals {
 
   base_condition = "assertion.repository_owner_id=='${var.github_owner_id}' && assertion.repository_id=='${var.github_repo_id}'"
 
+  # Only the main (deployer) provider takes the optional environment term; preview and drift pin their own.
+  environment_term = var.allowed_environment == null ? "" : " && assertion.environment=='${var.allowed_environment}'"
+
   cluster_role = var.create_custom_connect_role ? "projects/${var.project_id}/roles/${google_project_iam_custom_role.connect[0].role_id}" : var.deployer_cluster_role
 
   pool_name  = "projects/${var.project_number}/locations/global/workloadIdentityPools/${var.pool_id}"
@@ -36,7 +39,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_provider_id = var.provider_id
   display_name                       = var.provider_display_name
   attribute_mapping                  = local.attribute_mapping
-  attribute_condition                = "${local.base_condition} && assertion.job_workflow_ref.matches('^${local.repository_regex}/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
+  attribute_condition                = "${local.base_condition}${local.environment_term} && assertion.job_workflow_ref.matches('^${local.repository_regex}/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
 
   oidc {
     issuer_uri = local.issuer_uri
@@ -57,7 +60,7 @@ resource "google_service_account" "deployer" {
   for_each = local.envs
 
   project      = var.project_id
-  account_id   = "gh-deployer-${each.key}"
+  account_id   = lookup(var.deployer_account_ids, each.key, "gh-deployer-${each.key}")
   display_name = "GitHub Actions deployer (${each.key})"
 }
 
@@ -67,6 +70,9 @@ resource "google_service_account_iam_member" "wif" {
   service_account_id = google_service_account.deployer[each.key].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principal://iam.googleapis.com/${local.pool_name}/subject/${var.sub_claim_prefix}:environment:${each.key}"
+
+  # A principal:// member is rejected until its pool exists.
+  depends_on = [google_iam_workload_identity_pool.github]
 }
 
 resource "google_project_iam_member" "cluster" {

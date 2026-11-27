@@ -6,7 +6,8 @@ the idea behind it. The stages follow the order the platform was built in.
 
 It does not replace the step-by-step guides (the template's `wiki/gke-cluster-setup.md`,
 `wiki/platform-setup.md`, `wiki/github-repository-settings.md`) or this repository's
-[`import-runbook.md`](import-runbook.md) and [`hardening-runbook.md`](hardening-runbook.md). It collects the
+[`import-runbook.md`](import-runbook.md), [`hardening-runbook.md`](hardening-runbook.md) and
+[`production-runbook.md`](production-runbook.md) (the separate production project and cluster). It collects the
 commands the owner ran or was told to run, with the corrections found on the way. A few items were added for
 completeness; each is marked "Added for completeness, not from the session". Where a guide command and the
 command that worked differ, this page gives the working one and says why.
@@ -33,6 +34,9 @@ variable from the env file or a placeholder such as `your-project-id` or `<billi
 14. [Troubleshooting index](#14-troubleshooting-index)
 15. [Concepts glossary](#15-concepts-glossary)
 16. [Appendix: pausing the cluster and other one-off commands](#16-appendix-pausing-the-cluster-and-other-one-off-commands)
+
+The production project and its regional cluster are built by [`production-runbook.md`](production-runbook.md),
+which reuses the commands of sections 5, 7, 8 and 12 below with production's names.
 
 ---
 

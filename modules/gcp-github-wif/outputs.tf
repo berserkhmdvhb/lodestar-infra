@@ -17,3 +17,18 @@ output "drift_workload_identity_providers" {
   description = "Map of environment to drift provider resource name (empty when drift is off)."
   value       = { for e in local.drift_envs : e => "${local.pool_name}/providers/github-oidc-drift-${e}" }
 }
+
+output "provider_attribute_condition" {
+  description = "Attribute condition of the main (deployer) provider."
+  value       = google_iam_workload_identity_pool_provider.github.attribute_condition
+}
+
+output "deployer_wif_members" {
+  description = "Map of environment to the principal that may impersonate its deployer."
+  value       = { for e, m in google_service_account_iam_member.wif : e => m.member }
+}
+
+output "deployer_cluster_roles" {
+  description = "Map of environment to the project role its deployer holds."
+  value       = { for e, m in google_project_iam_member.cluster : e => m.role }
+}

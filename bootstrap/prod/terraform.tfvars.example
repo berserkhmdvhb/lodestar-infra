@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. Placeholders only here.
+# This is the PRODUCTION project: not the project of bootstrap/.
+project_id        = "your-production-project-id"
+state_bucket_name = "your-unique-production-tofu-state-bucket"
+# region              = "europe-west1"
+# bucket_cmek_enabled = false
+# state_admins        = ["serviceAccount:ci@your-production-project-id.iam.gserviceaccount.com"]

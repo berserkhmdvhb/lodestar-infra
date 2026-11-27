@@ -45,7 +45,7 @@
 | 1 | State and Google Cloud | L1.1 to L1.7 | **done** (2026-11-27; see "Phase 1 closed" under L1.7). It imports the owner's by-hand GKE setup; see "Carried from the owner's by-hand setup" below |
 | 2 | Cloudflare | L2.0 to L2.3 | L2.0 built (PR #7, 2026-11-27); the owner sets Cloudflare up by hand first, then L2.1 to L2.3 import it |
 | 3 | Environments, CI and docs | L3.1 to L3.3 | not started (largely superseded by L1.5 to L1.7 and phase 4) |
-| 4 | A separate production environment | L4.1 to L4.7 | planned (2026-11-27, design approved); build now, the owner applies after the Cloudflare setup |
+| 4 | A separate production environment | L4.1 to L4.7 | L4.1 to L4.5 built and reviewed (PR #10, 2026-11-27); the owner applies after the Cloudflare setup; L4.6 and L4.7 after production is live |
 
 ### Task L0.1: Scaffold
 **Files:** `README.md` (purpose, layout, the apply workflow, links to the guides), `LICENSE` (Apache-2.0), `.gitignore`, `.pre-commit-config.yaml` (tofu fmt and validate, tflint, checkov, gitleaks), `tools/pins.tsv` and `scripts/tools.sh` (checksum-verified install into `.tools/bin` of tofu, tflint and checkov through `uv tool`), and a `Makefile` (`tools fmt validate lint test check`).
@@ -350,30 +350,34 @@ Also cover drift detection, which runs as `tofu plan` on a schedule once credent
 
 ### Task L4.1: Module inputs with byte-identical defaults
 **Files:** `modules/gcp-gke`, `modules/gcp-github-wif`, their tests, and the envs/apps composition test.
-- [ ] **`gcp-gke`:**
+- [x] **`gcp-gke`:**
   - `node_locations` (default `null`);
   - `location_policy` (default `"ANY"`; validation `ANY` | `BALANCED`);
   - `oauth_scopes` (default: today's two scopes);
   - the maintenance window days and times (default: today's weekend window);
   - the pool's `initial_node_count = var.min_node_count` (already ignored in `lifecycle`);
   - the `location` description says "zone or region".
-- [ ] **`gcp-github-wif`:**
+- [x] **`gcp-github-wif`:**
   - an optional `allowed_environment` term in the provider's attribute condition (default `null`: unchanged);
   - one pool serving **several repositories**, each with its owner and repository IDs, its immutable subject prefix and its own deployer;
   - deployer IDs as an input, validated at 30 characters or fewer (the service account limit).
 
   Choose between one provider per repository and one provider with a repository list, record the ruling, and keep `apps` byte-identical.
-- [ ] **Tests:** for each input, the default renders today's exact values, and the production values render as specified. For WIF: a two-repository case, a foreign repository refused, and a non-production environment refused when `allowed_environment` is set.
+- [x] **Tests:** for each input, the default renders today's exact values, and the production values render as specified. For WIF: a two-repository case, a foreign repository refused, and a non-production environment refused when `allowed_environment` is set.
+
+**Executed (2026-11-27, PR #10; review plus 1 fix round, re-review clean):** the `gcp-gke` inputs `node_locations`, `location_policy`, `oauth_scopes`, the maintenance window (with a 48h-per-32-days validation) and the per-zone, create-only `initial_node_count`; the `gcp-github-wif` inputs `allowed_environment` (CEL-safe, refusing previews and drift in a production call) and `deployer_account_ids` (6–30 characters), with the multi-call rules in its README. Ruling: per-zone limits 1–2 across 2 zones instead of a total cap, because only per-zone limits guarantee a node in each zone. All defaults keep `apps` byte-identical.
 
 ### Task L4.2: The state module and the production bootstrap
 **Files:** `modules/gcp-state-backend` (new), `bootstrap/` (refactored), a production bootstrap root, the Makefile root discovery if needed, `dependabot.yml`, and tests.
-- [ ] **The module:** the bucket, the KMS ring and key, `state_admins` (objectAdmin) and `state_readers` (objectViewer plus EncrypterDecrypter), with the bootstrap's existing validations.
-- [ ] **`bootstrap/` calls the module, with `moved` blocks for every resource.** Its tests move with the resources they check. Owner acceptance is the owner's local plan: moves only, 0 to add, 0 to change, 0 to destroy. Hard stop otherwise.
-- [ ] **The production bootstrap root:** the same module for the production project, with a git-ignored `override.tf` backend and the same state-migration proof steps as `bootstrap/`. Its lock file carries the linux_amd64 and darwin_arm64 hashes, and the Makefile validates, lints, scans and tests it.
+- [x] **The module:** the bucket, the KMS ring and key, `state_admins` (objectAdmin) and `state_readers` (objectViewer plus EncrypterDecrypter), with the bootstrap's existing validations.
+- [x] **`bootstrap/` calls the module, with `moved` blocks for every resource.** Its tests move with the resources they check. Owner acceptance is the owner's local plan: moves only, 0 to add, 0 to change, 0 to destroy. Hard stop otherwise.
+- [x] **The production bootstrap root:** the same module for the production project, with a git-ignored `override.tf` backend and the same state-migration proof steps as `bootstrap/`. Its lock file carries the linux_amd64 and darwin_arm64 hashes, and the Makefile validates, lints, scans and tests it.
+
+**Executed (2026-11-27, PR #10; review plus 1 fix round):** `modules/gcp-state-backend`. `bootstrap/` calls it with `moved` blocks, so the expected owner plan is exactly 3 moves (key ring, key, bucket) and 0 / 0 / 0; a bats test proves every live address is covered. `bootstrap/prod` (prefix `bootstrap-prod`) enables 4 APIs, including Cloud Resource Manager. Ruling: no `state_readers` input, because the CI planner grants itself read access. Owner step pending: init, the 3-move plan and apply (production runbook step 0).
 
 ### Task L4.3: The `envs/prod` composition
 **Files:** `envs/prod/{versions,providers,backend,main,variables,outputs}.tf`, `terraform.tfvars.example`, and tests under `tests/envs-prod/`.
-- [ ] **Modules:**
+- [x] **Modules:**
   - `gcp-project` (no `artifactregistry`; no `cloudkms`, which the bootstrap owns);
   - `gcp-network`: `prod-vpc`, `prod-subnet` 10.40.0.0/20, pods 10.50.0.0/16, services 10.60.0.0/20, `prod-router`, `prod-nat`;
   - the node service account;
@@ -384,26 +388,30 @@ Also cover drift detection, which runs as `tofu plan` on a schedule once credent
   - `gcp-platform-secret`: the production tunnel token;
   - `gcp-ci-planner`;
   - `gcp-budget`: €250, with alerts at 50/90/100/150 %.
-- [ ] **Explicit `depends_on`:** everything on `module.project`; the secrets key's agent grant on the container API; the External Secrets grants on `module.gke`.
-- [ ] **Tests:**
+- [x] **Explicit `depends_on`:** everything on `module.project`; the secrets key's agent grant on the container API; the External Secrets grants on `module.gke`.
+- [x] **Tests:**
   - every setting above;
   - no `apps` identifier or principal anywhere in the root;
   - no forbidden role;
   - the `depends_on` edges;
   - `make check` green with no tfvars.
 
+**Executed (2026-11-27, PR #10; review plus 1 fix round):** `envs/prod` for 3 services. One `gcp-github-wif` call per service (`for_each`), with the custom role created once in `modules/gcp-gke-connect-role`, so adding or renaming a service never recreates another pool. Exact-string tests cover each pool's condition and each deployer's subject. The `depends_on` chain is explicit (APIs, then the cluster, then the Workload Identity bindings). The audit config waits for the APIs. A first plan creates 36 + 6S + K resources (58 for 3 services and 4 keys).
+
 ### Task L4.4: CI for the production root
 **Files:** `.github/workflows/plan.yml`, `.github/workflows/drift.yml`, `scripts/ci-plan.sh` (if needed), the bats tests, and `docs/ci-identity-runbook.md`.
-- [ ] **Separate explicit production jobs:**
+- [x] **Separate explicit production jobs:**
   - each has its own "configured yet?" check and its own `TF_PROD_*` secrets, and authenticates through production's own planner;
   - drift has its own issue title per root;
   - no dynamic `secrets[...]` lookup, no `&&/||` fallback between roots, and no reusable workflow.
-- [ ] **The runbook:** the production planner's secrets (names only), and the first production drift run with the public-log identifier scan.
-- [ ] **Tests:** actionlint and zizmor clean; bats asserting that each job reads only its own root's secrets.
+- [x] **The runbook:** the production planner's secrets (names only), and the first production drift run with the public-log identifier scan.
+- [x] **Tests:** actionlint and zizmor clean; bats asserting that each job reads only its own root's secrets.
+
+**Executed (2026-11-27, PR #10; review plus 1 fix round):** `plan-prod` and `drift-prod` with their own `TF_PROD_*` secrets (12 secrets, 2 variables) and production's own planner. A per-job path filter (`scripts/ci-changed.sh`). Every leaf of `TF_PROD_SERVICES` is masked before any tofu command and redacted longest first, including the regex-escaped forms. Summaries and drift issue bodies are redacted for both roots (also shipped to `main` as PR #9).
 
 ### Task L4.5: The owner's production runbook
 **Files:** `docs/production-runbook.md`, and the operations-runbook index.
-- [ ] **Steps, in order:**
+- [x] **Steps, in order:**
   1. create the project and link billing;
   2. the production bootstrap apply and state migration, with its proof;
   3. the `envs/prod` plan, apply and "No changes";
@@ -413,6 +421,8 @@ Also cover drift detection, which runs as `tofu plan` on a schedule once credent
   7. the template's environment-level variables.
 
   Expected output for every step, zsh-safe, no comments in code blocks, and no real values.
+
+**Executed (2026-11-27, PR #10; review plus 2 fix rounds):** `docs/production-runbook.md`, steps 0 to 10 with Expect lines and a troubleshooting table. A bats test runs `zsh -n` and `bash -n` on every block and checks that nothing is echoed. It verifies the template's zone spread before applying `deploy/cloudflared/`. A final whole-phase review followed; its fix wave added `envs/prod` to Dependabot, plus a test that covers every root.
 
 ### Task L4.6: Remove production from `apps`
 **Files:** `envs/apps/main.tf` (`local.environments`, the `app_environments` passed to `module.secrets`, `local.secret_keys`), its tests, and the runbook.

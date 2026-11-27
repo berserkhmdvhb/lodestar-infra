@@ -321,3 +321,160 @@ run "dot_in_repository_is_regex_escaped" {
     error_message = "a dot in the repository name must be escaped like in gcp-ci-planner"
   }
 }
+
+# L4.1: allowed_environment and deployer IDs. Defaults render today's exact values (also asserted above).
+run "defaults_have_no_environment_term_and_todays_deployer_ids" {
+  command = plan
+
+  assert {
+    condition     = !strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "assertion.environment")
+    error_message = "no environment term by default"
+  }
+  assert {
+    condition     = alltrue([for e, s in google_service_account.deployer : s.account_id == "gh-deployer-${e}"])
+    error_message = "default deployer ids are gh-deployer-<env>"
+  }
+}
+
+run "production_provider_admits_only_the_production_environment" {
+  command = plan
+
+  variables {
+    environments         = ["production"]
+    allowed_environment  = "production"
+    pool_id              = "github-example-repo"
+    deployer_account_ids = { production = "gh-example-repo-prod" }
+  }
+
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.github.attribute_condition == "assertion.repository_owner_id=='123' && assertion.repository_id=='456' && assertion.environment=='production' && assertion.job_workflow_ref.matches('^example-owner/example-repo/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
+    error_message = "exact condition with the environment term"
+  }
+  assert {
+    condition = (
+      keys(google_service_account.deployer) == ["production"]
+      && google_service_account.deployer["production"].account_id == "gh-example-repo-prod"
+      && google_iam_workload_identity_pool.github.workload_identity_pool_id == "github-example-repo"
+      && google_service_account_iam_member.wif["production"].member == "principal://iam.googleapis.com/projects/123456789/locations/global/workloadIdentityPools/github-example-repo/subject/repo:example-owner@123/example-repo@456:environment:production"
+    )
+    error_message = "one production deployer bound to the immutable production subject in its own pool"
+  }
+}
+
+# Several repositories: one module call per repository, each with its own pool, provider and deployer
+# (a pool per repository is at least as isolated as a shared pool). This is the second repository.
+run "second_repository_gets_its_own_pool_and_condition" {
+  command = plan
+
+  variables {
+    github_repository    = "example-owner/other-repo"
+    github_repo_id       = "789"
+    sub_claim_prefix     = "repo:example-owner@123/other-repo@789"
+    environments         = ["production"]
+    allowed_environment  = "production"
+    pool_id              = "github-other-repo"
+    deployer_account_ids = { production = "gh-other-repo-prod" }
+  }
+
+  assert {
+    condition     = strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "assertion.repository_id=='789' && assertion.environment=='production'") && strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "'^example-owner/other-repo/")
+    error_message = "the second repository's provider pins its own repository ID"
+  }
+  assert {
+    condition     = !strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "'456'") && !strcontains(google_service_account_iam_member.wif["production"].member, "example-repo")
+    error_message = "a foreign repository (the first one) is not admitted"
+  }
+  assert {
+    condition     = google_service_account.deployer["production"].account_id == "gh-other-repo-prod" && output.workload_identity_provider == "projects/123456789/locations/global/workloadIdentityPools/github-other-repo/providers/github-oidc"
+    error_message = "own deployer and own pool"
+  }
+}
+
+run "environment_term_sits_between_repository_and_workflow_terms" {
+  command = plan
+
+  variables {
+    allowed_environment = "staging"
+  }
+
+  assert {
+    condition     = strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "assertion.repository_id=='456' && assertion.environment=='staging' && assertion.job_workflow_ref")
+    error_message = "environment term position and value"
+  }
+}
+
+run "allowed_environment_rejects_quote_injection" {
+  command = plan
+
+  variables {
+    allowed_environment = "production' || true || '"
+  }
+
+  expect_failures = [var.allowed_environment]
+}
+
+run "deployer_id_over_30_characters_is_refused" {
+  command = plan
+
+  variables {
+    environments         = ["production"]
+    deployer_account_ids = { production = "gh-deployer-example-repository-production" }
+  }
+
+  expect_failures = [var.deployer_account_ids]
+}
+
+run "deployer_id_badly_shaped_is_refused" {
+  command = plan
+
+  variables {
+    environments         = ["production"]
+    deployer_account_ids = { production = "Gh_Deployer" }
+  }
+
+  expect_failures = [var.deployer_account_ids]
+}
+
+run "deployer_id_for_an_unknown_environment_is_refused" {
+  command = plan
+
+  variables {
+    deployer_account_ids = { nonsense = "gh-deployer-nonsense" }
+  }
+
+  expect_failures = [var.deployer_account_ids]
+}
+
+run "production_call_with_previews_is_refused" {
+  command = plan
+
+  variables {
+    environments        = ["production"]
+    allowed_environment = "production"
+    enable_previews     = true
+  }
+
+  expect_failures = [var.allowed_environment]
+}
+
+run "production_call_with_drift_is_refused" {
+  command = plan
+
+  variables {
+    environments        = ["production"]
+    allowed_environment = "production"
+    enable_drift        = true
+  }
+
+  expect_failures = [var.allowed_environment]
+}
+
+run "default_deployer_id_too_long_is_refused" {
+  command = plan
+
+  variables {
+    environments = ["a-very-long-environment-name"]
+  }
+
+  expect_failures = [var.deployer_account_ids]
+}
