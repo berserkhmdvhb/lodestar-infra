@@ -68,6 +68,11 @@ variable "allowed_environment" {
     condition     = var.allowed_environment == null ? true : can(regex("^[A-Za-z0-9._-]+$", var.allowed_environment))
     error_message = "allowed_environment must be null or contain only letters, digits, dot, underscore and hyphen."
   }
+
+  validation {
+    condition     = var.allowed_environment == null || (!var.enable_previews && !var.enable_drift)
+    error_message = "With allowed_environment set, enable_previews and enable_drift must be off: their providers admit other environment subjects into the same pool."
+  }
 }
 
 variable "deployer_account_ids" {
@@ -83,6 +88,11 @@ variable "deployer_account_ids" {
   validation {
     condition     = alltrue([for e in keys(var.deployer_account_ids) : contains(var.environments, e)])
     error_message = "deployer_account_ids may only name environments listed in var.environments."
+  }
+
+  validation {
+    condition     = alltrue([for e in var.environments : can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", lookup(var.deployer_account_ids, e, "gh-deployer-${e}")))])
+    error_message = "Every resulting deployer service account ID (given here, else gh-deployer-<environment>) must be 6 to 30 characters: lowercase letters, digits and hyphens, starting with a letter."
   }
 }
 

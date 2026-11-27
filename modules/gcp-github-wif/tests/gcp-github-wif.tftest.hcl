@@ -444,3 +444,37 @@ run "deployer_id_for_an_unknown_environment_is_refused" {
 
   expect_failures = [var.deployer_account_ids]
 }
+
+run "production_call_with_previews_is_refused" {
+  command = plan
+
+  variables {
+    environments        = ["production"]
+    allowed_environment = "production"
+    enable_previews     = true
+  }
+
+  expect_failures = [var.allowed_environment]
+}
+
+run "production_call_with_drift_is_refused" {
+  command = plan
+
+  variables {
+    environments        = ["production"]
+    allowed_environment = "production"
+    enable_drift        = true
+  }
+
+  expect_failures = [var.allowed_environment]
+}
+
+run "default_deployer_id_too_long_is_refused" {
+  command = plan
+
+  variables {
+    environments = ["a-very-long-environment-name"]
+  }
+
+  expect_failures = [var.deployer_account_ids]
+}
