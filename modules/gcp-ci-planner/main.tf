@@ -60,6 +60,7 @@ resource "google_service_account_iam_member" "wif" {
 }
 
 resource "google_project_iam_member" "planner" {
+  # checkov:skip=CKV_GCP_117:roles/viewer is the read-only role `tofu plan` needs to refresh every resource; the identity has no write role (the module test fails on one)
   for_each = local.project_roles
 
   project = var.project_id
