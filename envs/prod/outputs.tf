@@ -17,12 +17,12 @@ output "GKE_LOCATION" {
 
 output "GCP_WIF_PROVIDER" {
   description = "Map of service key to its Workload Identity provider full name."
-  value       = { for k, m in local.wif : k => m.workload_identity_provider }
+  value       = { for k, m in module.github_wif : k => m.workload_identity_provider }
 }
 
 output "GCP_DEPLOYER_SA" {
   description = "Map of service key to its production deployer service account e-mail."
-  value       = { for k, m in local.wif : k => m.deployer_emails["production"] }
+  value       = { for k, m in module.github_wif : k => m.deployer_emails["production"] }
 }
 
 # CI identity of this repository for envs/prod: the secrets TF_PROD_CI_WIF_PROVIDER and TF_PROD_CI_SA.

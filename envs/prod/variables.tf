@@ -55,6 +55,13 @@ variable "services" {
   }
 
   validation {
+    condition = alltrue([for s in values(var.services) :
+      s.sub_claim_prefix == try("repo:${split("/", s.github_repository)[0]}@${s.github_owner_id}/${split("/", s.github_repository)[1]}@${s.github_repo_id}", "")
+    ])
+    error_message = "sub_claim_prefix must be repo:<owner>@<owner_id>/<repo>@<repo_id>, built from the same entry's github_repository, github_owner_id and github_repo_id."
+  }
+
+  validation {
     condition     = length(distinct([for s in values(var.services) : s.service_name])) == length(var.services)
     error_message = "service_name must be unique per service."
   }
@@ -105,4 +112,8 @@ variable "ci_github_repo_id" {
 variable "ci_sub_claim_prefix" {
   type        = string
   description = "This repository's immutable OIDC subject prefix: repo:<owner>@<owner_id>/<repo>@<repo_id>."
+  validation {
+    condition     = var.ci_sub_claim_prefix == try("repo:${split("/", var.ci_github_repository)[0]}@${var.ci_github_owner_id}/${split("/", var.ci_github_repository)[1]}@${var.ci_github_repo_id}", "")
+    error_message = "ci_sub_claim_prefix must be repo:<owner>@<owner_id>/<repo>@<repo_id>, built from ci_github_repository, ci_github_owner_id and ci_github_repo_id."
+  }
 }

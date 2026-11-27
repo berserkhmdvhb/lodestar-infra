@@ -64,17 +64,37 @@ has() { block "$1" | grep -qF -- "$2" || { echo "module $1 lacks: $2"; return 1;
   [ "$(sed -n '/project_services = \[/,/^  \]/p' "$P/main.tf" | grep -c '\.googleapis\.com')" -eq 8 ]
 }
 
-@test "deploy identity: production only, one pool per service, exactly one custom role" {
-  for m in github_wif_primary github_wif; do
-    for s in 'environments = ["production"]' 'allowed_environment = "production"' 'enable_previews = false' 'enable_drift = false' \
-      'pool_id = "gh-${each.key}"' 'deployer_account_ids = { production = each.value.deployer_account_id }'; do has "$m" "$s"; done
-  done
-  has github_wif_primary 'create_custom_connect_role = true'
-  has github_wif 'create_custom_connect_role = false'
-  has github_wif 'deployer_cluster_role = local.connect_role'
-  [ "$(grep -c 'create_custom_connect_role *= *true' "$P/main.tf")" -eq 1 ]
-  grep -qF 'primary_key  = sort(keys(var.services))[0]' "$P/main.tf"
-  grep -qF 'connect_role = "projects/${var.project_id}/roles/gkeDnsConnect"' "$P/main.tf"
+@test "deploy identity: one call per service, production only, one custom role created once outside the services" {
+  for s in 'for_each = var.services' 'environments = ["production"]' 'allowed_environment = "production"' 'enable_previews = false' 'enable_drift = false' \
+    'pool_id = "gh-${each.key}"' 'deployer_account_ids = { production = each.value.deployer_account_id }' \
+    'github_repository = each.value.github_repository' 'github_owner_id = each.value.github_owner_id' \
+    'github_repo_id = each.value.github_repo_id' 'sub_claim_prefix = each.value.sub_claim_prefix' \
+    'create_custom_connect_role = false' 'deployer_cluster_role = module.connect_role.role_name'; do has github_wif "$s"; done
+  has connect_role 'source = "../../modules/gcp-gke-connect-role"'
+  [ "$(grep -c 'create_custom_connect_role' "$P/main.tf")" -eq 1 ]
+  run ! grep -nE 'primary|local\.others|local\.connect_role' "$P/main.tf"
+}
+
+@test "planner: the ci_* inputs, in the right slots" {
+  for s in 'github_repository = var.ci_github_repository' 'github_owner_id = var.ci_github_owner_id' 'github_repo_id = var.ci_github_repo_id' \
+    'sub_claim_prefix = var.ci_sub_claim_prefix' 'state_bucket = var.state_bucket' 'state_kms_key_id = var.state_kms_key_id'; do has ci_planner "$s"; done
+}
+
+@test "the connect role module has exactly the permissions gcp-github-wif creates itself" {
+  a="$(grep -h 'permissions *=' "$ROOT/modules/gcp-gke-connect-role/main.tf" | tr -s ' ')"
+  b="$(grep -h 'permissions *=' "$ROOT/modules/gcp-github-wif/main.tf" | tr -s ' ')"
+  [ -n "$a" ] && [ "$a" = "$b" ]
+  [ "$(grep -hE '^ *(role_id|title|stage) *=' "$ROOT/modules/gcp-gke-connect-role/main.tf" | tr -s ' ')" = "$(grep -hE '^ *(role_id|title|stage) *=' "$ROOT/modules/gcp-github-wif/main.tf" | tr -s ' ')" ]
+}
+
+@test "project-level IAM in gcp-project waits for the API enablement; bootstrap/prod enables Resource Manager" {
+  sed -n '/google_project_iam_audit_config/,/^}/p' "$ROOT/modules/gcp-project/main.tf" | grep -qF 'depends_on = [google_project_service.this]'
+  grep -qF 'cloudresourcemanager.googleapis.com' "$ROOT/bootstrap/prod/main.tf"
+}
+
+@test "principal members wait for their pool" {
+  sed -n '/resource "google_service_account_iam_member" "wif"/,/^}/p' "$ROOT/modules/gcp-github-wif/main.tf" | grep -qF 'depends_on = [google_iam_workload_identity_pool.github]'
+  sed -n '/resource "google_service_account_iam_member" "wif"/,/^}/p' "$ROOT/modules/gcp-ci-planner/main.tf" | grep -qF 'depends_on = [google_iam_workload_identity_pool.ci]'
 }
 
 @test "secrets: one call per service, production only" {
@@ -86,7 +106,6 @@ has() { block "$1" | grep -qF -- "$2" || { echo "module $1 lacks: $2"; return 1;
     block "$m" | grep -E 'depends_on = \[.*module\.project' >/dev/null || { echo "module $m lacks depends_on module.project"; false; }
   done
   for m in secrets platform_secrets; do block "$m" | grep -E 'depends_on = \[.*module\.gke[],]' >/dev/null || { echo "$m lacks module.gke"; false; }; done
-  block github_wif | grep -E 'depends_on = \[.*module\.github_wif_primary' >/dev/null
   # the secrets key's agent grant waits for the container API (module.project enables it), and the cluster waits for the grant
   has gke_secrets_key 'depends_on = [module.project]'
   grep -B1 -A3 'depends_on = \[google_kms_crypto_key_iam_member.gke_agent\]' "$ROOT/modules/gcp-gke-secrets-key/outputs.tf" >/dev/null
@@ -100,8 +119,8 @@ has() { block "$1" | grep -qF -- "$2" || { echo "module $1 lacks: $2"; return 1;
 
 @test "no principal, forbidden role or IAM resource in the root; the called modules grant no owner, editor or admin role" {
   run ! grep -nE '^resource|serviceAccount:|user:|group:|allUsers|allAuthenticatedUsers' "$P/main.tf"
-  [ "$(grep -c 'roles/' "$P/main.tf")" -eq 1 ] # the custom role the other pools reference
-  for m in gcp-project gcp-network gcp-node-sa gcp-gke gcp-gke-secrets-key gcp-github-wif gcp-secrets gcp-platform-secret gcp-ci-planner gcp-budget; do
+  run ! grep -n 'roles/' "$P/main.tf"
+  for m in gcp-project gcp-network gcp-node-sa gcp-gke gcp-gke-secrets-key gcp-gke-connect-role gcp-github-wif gcp-secrets gcp-platform-secret gcp-ci-planner gcp-budget; do
     run ! grep -nE 'roles/(owner|editor)|roles/[A-Za-z.]*[aA]dmin|\.admin\b' "$ROOT/modules/$m"/*.tf
   done
 }

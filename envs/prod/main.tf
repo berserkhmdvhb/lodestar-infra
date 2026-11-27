@@ -14,13 +14,6 @@ locals {
     "secretmanager.googleapis.com",
   ]
 
-  # The first key in sorted order owns the project-wide custom role gkeDnsConnect; the others reference it.
-  primary_key  = sort(keys(var.services))[0]
-  primary      = { (local.primary_key) = var.services[local.primary_key] }
-  others       = { for k, s in var.services : k => s if k != local.primary_key }
-  connect_role = "projects/${var.project_id}/roles/gkeDnsConnect"
-
-  wif = merge(module.github_wif_primary, module.github_wif)
 }
 
 module "project" {
@@ -108,32 +101,19 @@ module "gke" {
   depends_on = [module.project]
 }
 
-# One Workload Identity pool per service. The first call (sorted) creates the project-wide custom role; the
-# others wait for it and reference it by name.
-module "github_wif_primary" {
-  source   = "../../modules/gcp-github-wif"
-  for_each = local.primary
+# The custom role is created once, independent of the services, so adding or removing a service never moves it.
+module "connect_role" {
+  source = "../../modules/gcp-gke-connect-role"
 
-  project_id                 = var.project_id
-  project_number             = var.project_number
-  github_repository          = each.value.github_repository
-  github_owner_id            = each.value.github_owner_id
-  github_repo_id             = each.value.github_repo_id
-  sub_claim_prefix           = each.value.sub_claim_prefix
-  pool_id                    = "gh-${each.key}"
-  environments               = ["production"]
-  allowed_environment        = "production"
-  deployer_account_ids       = { production = each.value.deployer_account_id }
-  create_custom_connect_role = true
-  enable_previews            = false
-  enable_drift               = false
+  project_id = var.project_id
 
   depends_on = [module.project]
 }
 
+# One Workload Identity pool per service, all holding the one connect role.
 module "github_wif" {
   source   = "../../modules/gcp-github-wif"
-  for_each = local.others
+  for_each = var.services
 
   project_id                 = var.project_id
   project_number             = var.project_number
@@ -145,12 +125,12 @@ module "github_wif" {
   environments               = ["production"]
   allowed_environment        = "production"
   deployer_account_ids       = { production = each.value.deployer_account_id }
-  deployer_cluster_role      = local.connect_role
+  deployer_cluster_role      = module.connect_role.role_name
   create_custom_connect_role = false
   enable_previews            = false
   enable_drift               = false
 
-  depends_on = [module.project, module.github_wif_primary]
+  depends_on = [module.project]
 }
 
 module "ci_planner" {

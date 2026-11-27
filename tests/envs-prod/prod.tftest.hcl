@@ -43,7 +43,7 @@ override_resource {
 }
 
 override_resource {
-  target = module.github_wif_primary["site"].google_service_account.deployer["production"]
+  target = module.github_wif["site"].google_service_account.deployer["production"]
   values = {
     name  = "projects/your-production-project-id/serviceAccounts/gh-deployer-site@your-production-project-id.iam.gserviceaccount.com"
     email = "gh-deployer-site@your-production-project-id.iam.gserviceaccount.com"
@@ -100,24 +100,71 @@ run "outputs_map_onto_the_template_variables" {
 
 # The resolved resource attributes of the modules are covered by each module's own tests; outputs are all a
 # root test can reach, and tests/envs-prod.bats checks the arguments the root passes.
-run "two_services_two_pools_one_custom_role_owner" {
+run "two_services_two_pools_one_role" {
   command = plan
 
   assert {
-    condition     = keys(module.github_wif_primary) == ["site"] && keys(module.github_wif) == ["web"]
-    error_message = "the first key in sorted order is the one call that creates the custom role; the other follows"
+    condition     = keys(module.github_wif) == ["site", "web"]
+    error_message = "one call per service"
   }
   assert {
-    condition     = module.github_wif_primary["site"].workload_identity_provider != module.github_wif["web"].workload_identity_provider
+    condition     = module.github_wif["site"].workload_identity_provider != module.github_wif["web"].workload_identity_provider
     error_message = "each service has its own pool"
   }
   assert {
-    condition     = module.github_wif["web"].preview_workload_identity_provider == null && length(module.github_wif["web"].drift_workload_identity_providers) == 0 && module.github_wif_primary["site"].preview_workload_identity_provider == null && length(module.github_wif_primary["site"].drift_workload_identity_providers) == 0
-    error_message = "previews and drift are off"
+    condition     = alltrue([for m in values(module.github_wif) : m.preview_workload_identity_provider == null && length(m.drift_workload_identity_providers) == 0 && keys(m.deployer_emails) == ["production"]])
+    error_message = "previews and drift are off; production is the only environment"
   }
   assert {
-    condition     = keys(module.github_wif_primary["site"].deployer_emails) == ["production"] && keys(module.github_wif["web"].deployer_emails) == ["production"]
-    error_message = "production is the only environment"
+    condition     = module.connect_role.role_name == "projects/your-production-project-id/roles/gkeDnsConnect"
+    error_message = "the one custom role"
+  }
+  assert {
+    condition     = module.github_wif["site"].deployer_cluster_roles == { production = "projects/your-production-project-id/roles/gkeDnsConnect" } && module.github_wif["web"].deployer_cluster_roles == { production = "projects/your-production-project-id/roles/gkeDnsConnect" }
+    error_message = "every deployer holds the one connect role and nothing else"
+  }
+}
+
+# Each pool admits only its own repository (owner and repo IDs, workflow files) and the production environment;
+# each deployer is bound to its own immutable production subject.
+run "identity_wiring_per_service" {
+  command = plan
+
+  assert {
+    condition     = module.github_wif["web"].provider_attribute_condition == "assertion.repository_owner_id=='111111111' && assertion.repository_id=='222222222' && assertion.environment=='production' && assertion.job_workflow_ref.matches('^example-owner/example-repo/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
+    error_message = "web pool condition"
+  }
+  assert {
+    condition     = module.github_wif["site"].provider_attribute_condition == "assertion.repository_owner_id=='111111111' && assertion.repository_id=='444444444' && assertion.environment=='production' && assertion.job_workflow_ref.matches('^example-owner/example\\\\.site/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
+    error_message = "site pool condition"
+  }
+  assert {
+    condition     = module.github_wif["web"].deployer_wif_members == { production = "principal://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/gh-web/subject/repo:example-owner@111111111/example-repo@222222222:environment:production" }
+    error_message = "web deployer member"
+  }
+  assert {
+    condition     = module.github_wif["site"].deployer_wif_members == { production = "principal://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/gh-site/subject/repo:example-owner@111111111/example.site@444444444:environment:production" }
+    error_message = "site deployer member"
+  }
+  assert {
+    condition     = output.GCP_WIF_PROVIDER["web"] == "projects/123456789012/locations/global/workloadIdentityPools/gh-web/providers/github-oidc"
+    error_message = "provider belongs to the web pool"
+  }
+}
+
+run "planner_uses_the_ci_inputs" {
+  command = plan
+
+  assert {
+    condition     = module.ci_planner.ci_attribute_condition == "assertion.repository_owner_id=='111111111' && assertion.repository_id=='333333333' && assertion.event_name in ['pull_request', 'schedule', 'workflow_dispatch'] && assertion.job_workflow_ref.matches('^example-owner/example-infra-repo/\\\\.github/workflows/(plan|drift)\\\\.yml@refs/(heads/main|pull/[0-9]+/merge)$')"
+    error_message = "planner condition from the ci_* inputs"
+  }
+  assert {
+    condition = module.ci_planner.ci_wif_members == sort([
+      "principal://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/github-infra/subject/repo:example-owner@111111111/example-infra-repo@333333333:pull_request",
+      "principal://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/github-infra/subject/repo:example-owner@111111111/example-infra-repo@333333333:ref:refs/heads/main",
+    ])
+    error_message = "planner members from the ci_* inputs"
   }
 }
 
@@ -169,29 +216,6 @@ run "secrets_key_is_wired_to_the_cluster" {
   }
 }
 
-run "one_service_has_no_second_call" {
-  command = plan
-
-  variables {
-    services = {
-      site = {
-        service_name        = "your-site-name"
-        github_repository   = "example-owner/example.site"
-        github_owner_id     = "111111111"
-        github_repo_id      = "444444444"
-        sub_claim_prefix    = "repo:example-owner@111111111/example.site@444444444"
-        deployer_account_id = "gh-deployer-site"
-        secret_keys         = ["stats-pass"]
-      }
-    }
-  }
-
-  assert {
-    condition     = keys(module.github_wif_primary) == ["site"] && length(module.github_wif) == 0
-    error_message = "a single service owns the role"
-  }
-}
-
 run "empty_services_rejected" {
   command = plan
   variables {
@@ -204,8 +228,8 @@ run "duplicate_deployer_rejected" {
   command = plan
   variables {
     services = {
-      a-svc = { service_name = "one-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o/a", deployer_account_id = "gh-deployer-x", secret_keys = [] }
-      b-svc = { service_name = "two-name", github_repository = "o/b", github_owner_id = "1", github_repo_id = "3", sub_claim_prefix = "repo:o/b", deployer_account_id = "gh-deployer-x", secret_keys = [] }
+      a-svc = { service_name = "one-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o@1/a@2", deployer_account_id = "gh-deployer-x", secret_keys = [] }
+      b-svc = { service_name = "two-name", github_repository = "o/b", github_owner_id = "1", github_repo_id = "3", sub_claim_prefix = "repo:o@1/b@3", deployer_account_id = "gh-deployer-x", secret_keys = [] }
     }
   }
   expect_failures = [var.services]
@@ -215,8 +239,8 @@ run "duplicate_service_name_rejected" {
   command = plan
   variables {
     services = {
-      a-svc = { service_name = "same-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o/a", deployer_account_id = "gh-deployer-a", secret_keys = [] }
-      b-svc = { service_name = "same-name", github_repository = "o/b", github_owner_id = "1", github_repo_id = "3", sub_claim_prefix = "repo:o/b", deployer_account_id = "gh-deployer-b", secret_keys = [] }
+      a-svc = { service_name = "same-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o@1/a@2", deployer_account_id = "gh-deployer-a", secret_keys = [] }
+      b-svc = { service_name = "same-name", github_repository = "o/b", github_owner_id = "1", github_repo_id = "3", sub_claim_prefix = "repo:o@1/b@3", deployer_account_id = "gh-deployer-b", secret_keys = [] }
     }
   }
   expect_failures = [var.services]
@@ -226,8 +250,26 @@ run "short_deployer_id_rejected" {
   command = plan
   variables {
     services = {
-      a-svc = { service_name = "one-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o/a", deployer_account_id = "ab", secret_keys = [] }
+      a-svc = { service_name = "one-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o@1/a@2", deployer_account_id = "ab", secret_keys = [] }
     }
   }
   expect_failures = [var.services]
+}
+
+run "mismatched_prefix_rejected" {
+  command = plan
+  variables {
+    services = {
+      a-svc = { service_name = "one-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o@1/a@3", deployer_account_id = "gh-deployer-a", secret_keys = [] }
+    }
+  }
+  expect_failures = [var.services]
+}
+
+run "mismatched_ci_prefix_rejected" {
+  command = plan
+  variables {
+    ci_sub_claim_prefix = "repo:example-owner@111111111/example-infra-repo@999"
+  }
+  expect_failures = [var.ci_sub_claim_prefix]
 }
