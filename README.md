@@ -14,11 +14,11 @@ after reviewing the plan, runs the state-only import by hand: see [`docs/import-
 | `bootstrap/` | One-off root that creates the remote-state bucket |
 | `modules/` | Reusable modules, each with a `tofu test` file using mock providers |
 | `envs/apps/` | The root for the apps cluster, composed from the modules |
-| `docs/` | Plans, decisions, the import runbook, the hardening runbook and the [operations runbook](docs/operations-runbook.md) of every manual step |
+| `docs/` | Plans, decisions, the import runbook, the hardening runbook, the [CI identity runbook](docs/ci-identity-runbook.md) and the [operations runbook](docs/operations-runbook.md) of every manual step |
 | `tools/` | `pins.tsv` (pinned, checksum-verified toolchain) and hash-pinned Python requirements |
-| `scripts/` | `tools.sh` installer and its safe archive extractor; `github-settings.sh` (repository settings as code) |
-| `tests/` | Bats tests for the installer and the settings script |
-| `.github/` | Workflows (CI, PR title, Scorecard), Dependabot and the pull request template |
+| `scripts/` | `tools.sh` installer and its safe archive extractor; `github-settings.sh` (repository settings as code); `ci-plan.sh` (the CI plan summary) |
+| `tests/` | Bats tests for the installer, the settings script and the CI plan script |
+| `.github/` | Workflows (CI, PR title, Scorecard, Plan, Drift), Dependabot and the pull request template |
 
 ## Prerequisite
 
@@ -65,6 +65,15 @@ Run `--apply` only after the first push or pull request has produced both checks
 After that, `main` takes pull requests only: squash merges, both checks green and up to date, no force
 push, no deletion, no bypass. Secret scanning with push protection, Dependabot alerts and security updates,
 and private vulnerability reporting are switched on.
+
+### Plans and drift (read-only, keyless)
+
+`plan.yml` posts a plan summary (counts and resource addresses, never values) to the job summary of pull
+requests from this repository; `drift.yml` plans `main` every Monday and opens or closes one issue
+"Drift detected in envs/apps". Both use a read-only Workload Identity identity (`modules/gcp-ci-planner`),
+plan with `-lock=false`, never print or upload the plan, and succeed without planning until the owner
+has applied the identity and set the repository secrets: see [`docs/ci-identity-runbook.md`](docs/ci-identity-runbook.md).
+They never apply anything.
 
 ### Provider updates
 
