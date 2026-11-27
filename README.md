@@ -11,7 +11,7 @@ after reviewing the plan, runs the state-only import by hand: see [`docs/import-
 
 | Path | Contents |
 | --- | --- |
-| `bootstrap/` | One-off root that creates the remote-state bucket |
+| `bootstrap/` | One-off root that creates the remote-state bucket (non-production), with `bootstrap/prod/` for the production project |
 | `modules/` | Reusable modules, each with a `tofu test` file using mock providers |
 | `modules/gcp-platform-secret` | Secret containers for non-app namespaces (the Cloudflare tunnel token) with one conditional access grant each; see [operations runbook 8.6](docs/operations-runbook.md) |
 | `envs/apps/` | The root for the apps cluster, composed from the modules |
