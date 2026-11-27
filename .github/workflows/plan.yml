@@ -1,0 +1,119 @@
+name: Plan
+
+# `tofu plan` of envs/apps on pull requests from this repository (never forks, never Dependabot), with a
+# read-only keyless identity (modules/gcp-ci-planner). Nothing identifying reaches the public log:
+# every identifying input is a repository secret (so GitHub masks it), the plan itself is never printed
+# or uploaded (scripts/ci-plan.sh), and the job summary holds only counts and resource addresses.
+# The jobs must not use GitHub environments (the identity trusts the pull_request subject).
+# Setup: docs/ci-identity-runbook.md.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "envs/**"
+      - "modules/**"
+      - "scripts/ci-plan.sh"
+      - ".github/workflows/plan.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: plan-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Plan envs/apps
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check that the CI identity is configured
+        id: cfg
+        env:
+          GCP_CI_WIF_PROVIDER: ${{ secrets.GCP_CI_WIF_PROVIDER }}
+          GCP_CI_SA: ${{ secrets.GCP_CI_SA }}
+          TF_PROJECT_ID: ${{ secrets.TF_PROJECT_ID }}
+          TF_PROJECT_NUMBER: ${{ secrets.TF_PROJECT_NUMBER }}
+          TF_BILLING_ACCOUNT: ${{ secrets.TF_BILLING_ACCOUNT }}
+          TF_BUDGET_ID: ${{ secrets.TF_BUDGET_ID }}
+          TF_BUDGET_DISPLAY_NAME: ${{ secrets.TF_BUDGET_DISPLAY_NAME }}
+          TF_GITHUB_REPOSITORY: ${{ secrets.TF_GITHUB_REPOSITORY }}
+          TF_GITHUB_OWNER_ID: ${{ secrets.TF_GITHUB_OWNER_ID }}
+          TF_GITHUB_REPO_ID: ${{ secrets.TF_GITHUB_REPO_ID }}
+          TF_SUB_CLAIM_PREFIX: ${{ secrets.TF_SUB_CLAIM_PREFIX }}
+          TF_CI_GITHUB_REPOSITORY: ${{ secrets.TF_CI_GITHUB_REPOSITORY }}
+          TF_CI_GITHUB_REPO_ID: ${{ secrets.TF_CI_GITHUB_REPO_ID }}
+          TF_CI_SUB_CLAIM_PREFIX: ${{ secrets.TF_CI_SUB_CLAIM_PREFIX }}
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_KMS_KEY_ID: ${{ secrets.TF_STATE_KMS_KEY_ID }}
+          TF_REGION: ${{ vars.TF_REGION }}
+          TF_ZONE: ${{ vars.TF_ZONE }}
+        run: |
+          missing=0
+          for name in GCP_CI_WIF_PROVIDER GCP_CI_SA TF_PROJECT_ID TF_PROJECT_NUMBER TF_BILLING_ACCOUNT TF_BUDGET_ID \
+            TF_BUDGET_DISPLAY_NAME TF_GITHUB_REPOSITORY TF_GITHUB_OWNER_ID TF_GITHUB_REPO_ID TF_SUB_CLAIM_PREFIX \
+            TF_CI_GITHUB_REPOSITORY TF_CI_GITHUB_REPO_ID TF_CI_SUB_CLAIM_PREFIX TF_STATE_BUCKET TF_STATE_KMS_KEY_ID \
+            TF_REGION TF_ZONE; do
+            if [[ -z "${!name}" ]]; then missing=1; fi
+          done
+          if [[ "${missing}" -eq 1 ]]; then
+            echo "configured=false" >> "${GITHUB_OUTPUT}"
+            echo "CI identity not configured yet; see docs/ci-identity-runbook.md" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "configured=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.cfg.outputs.configured == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Install OpenTofu (the pinned release only)
+        if: steps.cfg.outputs.configured == 'true'
+        run: |
+          scripts/tools.sh install tofu
+          echo "${GITHUB_WORKSPACE}/.tools/bin" >> "${GITHUB_PATH}"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        if: steps.cfg.outputs.configured == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_CI_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_CI_SA }}
+
+      - name: Plan (summary only)
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          TF_VAR_project_id: ${{ secrets.TF_PROJECT_ID }}
+          TF_VAR_project_number: ${{ secrets.TF_PROJECT_NUMBER }}
+          TF_VAR_billing_account: ${{ secrets.TF_BILLING_ACCOUNT }}
+          TF_VAR_budget_id: ${{ secrets.TF_BUDGET_ID }}
+          TF_VAR_budget_display_name: ${{ secrets.TF_BUDGET_DISPLAY_NAME }}
+          TF_VAR_github_repository: ${{ secrets.TF_GITHUB_REPOSITORY }}
+          TF_VAR_github_owner_id: ${{ secrets.TF_GITHUB_OWNER_ID }}
+          TF_VAR_github_repo_id: ${{ secrets.TF_GITHUB_REPO_ID }}
+          TF_VAR_sub_claim_prefix: ${{ secrets.TF_SUB_CLAIM_PREFIX }}
+          TF_VAR_ci_github_repository: ${{ secrets.TF_CI_GITHUB_REPOSITORY }}
+          TF_VAR_ci_github_repo_id: ${{ secrets.TF_CI_GITHUB_REPO_ID }}
+          TF_VAR_ci_sub_claim_prefix: ${{ secrets.TF_CI_SUB_CLAIM_PREFIX }}
+          TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_state_kms_key_id: ${{ secrets.TF_STATE_KMS_KEY_ID }}
+          TF_VAR_region: ${{ vars.TF_REGION }}
+          TF_VAR_zone: ${{ vars.TF_ZONE }}
+          REDACT_WIF_PROVIDER: ${{ secrets.GCP_CI_WIF_PROVIDER }}
+          REDACT_SA: ${{ secrets.GCP_CI_SA }}
+        run: |
+          scripts/ci-plan.sh "${RUNNER_TEMP}/summary.md"
+          {
+            echo "### Plan for envs/apps"
+            echo
+            cat "${RUNNER_TEMP}/summary.md"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Remove the summary file
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/summary.md"

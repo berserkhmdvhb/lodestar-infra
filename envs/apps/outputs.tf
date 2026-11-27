@@ -22,6 +22,17 @@ output "GCP_DEPLOYER_SA" {
   value       = module.github_wif.deployer_emails
 }
 
+# CI identity of this repository (docs/ci-identity-runbook.md): the secrets GCP_CI_WIF_PROVIDER and GCP_CI_SA.
+output "CI_WIF_PROVIDER" {
+  description = "Workload Identity provider full name for the plan and drift workflows."
+  value       = module.ci_planner.ci_workload_identity_provider
+}
+
+output "CI_SERVICE_ACCOUNT" {
+  description = "Read-only planner service account e-mail."
+  value       = module.ci_planner.ci_service_account
+}
+
 output "dns_endpoint" {
   description = "DNS-based control-plane endpoint (host name)."
   value       = module.gke.dns_endpoint

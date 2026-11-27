@@ -70,3 +70,18 @@ variable "state_kms_key_id" {
   type        = string
   description = "Full id of the Cloud KMS key that encrypts state and plans (bootstrap/ output kms_key_id)."
 }
+
+variable "ci_github_repository" {
+  type        = string
+  description = "This infrastructure repository as owner/repo (the CI planner identity is limited to it)."
+}
+
+variable "ci_github_repo_id" {
+  type        = string
+  description = "Numeric ID of this infrastructure repository (digits only)."
+}
+
+variable "ci_sub_claim_prefix" {
+  type        = string
+  description = "This repository's immutable OIDC subject prefix: repo:<owner>@<owner_id>/<repo>@<repo_id>."
+}

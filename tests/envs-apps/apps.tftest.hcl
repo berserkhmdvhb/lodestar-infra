@@ -15,6 +15,17 @@ variables {
   budget_id           = "00000000-0000-0000-0000-000000000000"
   state_bucket        = "your-unique-tofu-state-bucket"
   state_kms_key_id    = "projects/your-project-id/locations/europe-west1/keyRings/r/cryptoKeys/k"
+  ci_github_repository = "example-owner/example-infra-repo"
+  ci_github_repo_id    = "333333333"
+  ci_sub_claim_prefix  = "repo:example-owner@111111111/example-infra-repo@333333333"
+}
+
+override_resource {
+  target = module.ci_planner.google_service_account.planner
+  values = {
+    name  = "projects/your-project-id/serviceAccounts/tofu-planner@your-project-id.iam.gserviceaccount.com"
+    email = "tofu-planner@your-project-id.iam.gserviceaccount.com"
+  }
 }
 
 override_resource {
@@ -68,6 +79,19 @@ run "outputs_map_onto_the_template_variables" {
       production = "gh-deployer-production@your-project-id.iam.gserviceaccount.com"
     }
     error_message = "one deployer per environment"
+  }
+}
+
+run "ci_identity_outputs" {
+  command = plan
+
+  assert {
+    condition     = output.CI_WIF_PROVIDER == "projects/123456789012/locations/global/workloadIdentityPools/github-infra/providers/lodestar-infra"
+    error_message = "CI_WIF_PROVIDER is the CI provider full name"
+  }
+  assert {
+    condition     = output.CI_SERVICE_ACCOUNT == "tofu-planner@your-project-id.iam.gserviceaccount.com"
+    error_message = "CI_SERVICE_ACCOUNT is the planner e-mail"
   }
 }
 
