@@ -173,13 +173,19 @@ This pulls the Google half of L3.1 forward, because the import needs a root. `en
 - `tofu plan` again, expecting "No changes";
 - then the guides' checks.
 - [x] **Tests:** `tofu validate` on the root; a test that every import `id` uses variables, with no literal project ID; the outputs map onto the template's GitHub variables table.
-- [ ] **Owner acceptance** (reworded 2026-11-27 by the L1.2a ruling and the phase review):
+- [x] **Owner acceptance** (reworded 2026-11-27 by the L1.2a ruling and the phase review):
   - The first plan shows "41 to import, 0 to add, 0 to destroy".
   - In-place updates are state-only, at most 10, and nothing else:
     - the 9 `google_project_service` (`disable_on_destroy`, `disable_dependent_services`);
     - the cluster's `resource_labels` and `terraform_labels` gaining `cluster = "apps"`.
   - After the import apply, `tofu plan` shows "No changes".
   - Any replacement or destroy is a hard stop.
+
+**Owner-run acceptance (2026-11-27): PASSED.**
+1. **Bootstrap.** The bucket, key ring, key and two APIs (5 added). The state moved into the bucket, proven encrypted (`encrypted_data` present, no plain resources). The final override is enforced, and the local state was removed.
+2. **First import plan: failed.** The provider bills requests to the project, and the Service Usage API was off there, so the 9 API reads failed (403). The fix (commit 29eeb75, reviewed) has the bootstrap enable `serviceusage.googleapis.com`: 1 added.
+3. **Import plan: `41 to import, 0 to add, 1 to change, 0 to destroy`.** The only change was the cluster's state-only `cluster = "apps"` labels. The APIs showed no change.
+4. **After the import apply,** `tofu plan` reports **No changes. Your infrastructure matches the configuration.**
 
 **Executed (2026-11-27, commits 633cd07 and 308b4f8, plus the phase-1 fix wave):**
 - **Module fixes from the owner's live exports:** the NAT's `enable_endpoint_independent_mapping = false`; the budget's `calendar_period = "MONTH"` and `credit_types_treatment = "INCLUDE_ALL_CREDITS"`.
