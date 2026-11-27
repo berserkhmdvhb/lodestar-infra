@@ -1,5 +1,7 @@
 # bootstrap
 
+The resources of the bucket and key live in `modules/gcp-state-backend` (the same module serves
+[`prod/`](prod/README.md)); this root enables the APIs and calls it, with `moved` blocks that keep the live state.
 Creates the GCS bucket that holds OpenTofu state for the other roots, enables the Cloud KMS, Cloud Storage and
 Service Usage APIs (3 `google_project_service` resources; envs/apps needs Service Usage in the project), and the Cloud KMS key that
 encrypts that state (OpenTofu native state encryption, `aes_gcm` with the `gcp_kms` key provider).
@@ -66,5 +68,8 @@ Expect `versioning.enabled: true`, uniform access enabled, `public_access_preven
 no `retention_policy`. An object under `bootstrap/` in the bucket should not be readable as plain text.
 
 ## Tests
+
+`tests/state-moves.bats` (repository root) checks that every pre-refactor address is still here or has a `moved` block.
+The state values are tested in the module.
 
 `make test` runs `tofu test` here with a mock provider: no credentials, no API calls.

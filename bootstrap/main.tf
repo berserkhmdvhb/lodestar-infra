@@ -1,4 +1,5 @@
 # Service Usage is required in the project by envs/apps, whose provider bills requests to the project (user_project_override).
+# The APIs stay here, not in the module: they are a property of the project, and keeping them keeps their live address.
 resource "google_project_service" "apis" {
   for_each = toset(["cloudkms.googleapis.com", "storage.googleapis.com", "serviceusage.googleapis.com"])
 
@@ -6,97 +7,50 @@ resource "google_project_service" "apis" {
   disable_on_destroy = false
 }
 
-resource "google_kms_key_ring" "state" {
-  name     = var.kms_key_ring_name
-  location = var.region
+module "state" {
+  source = "../modules/gcp-state-backend"
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  depends_on = [google_project_service.apis]
-}
-
-resource "google_kms_crypto_key" "state" {
-  name            = var.kms_key_name
-  key_ring        = google_kms_key_ring.state.id
-  purpose         = "ENCRYPT_DECRYPT"
-  rotation_period = var.kms_rotation_period
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-data "google_storage_project_service_account" "gcs" {
-  count = var.bucket_cmek_enabled ? 1 : 0
+  state_bucket_name        = var.state_bucket_name
+  region                   = var.region
+  kms_key_ring_name        = var.kms_key_ring_name
+  kms_key_name             = var.kms_key_name
+  kms_rotation_period      = var.kms_rotation_period
+  bucket_cmek_enabled      = var.bucket_cmek_enabled
+  state_admins             = var.state_admins
+  noncurrent_versions_kept = var.noncurrent_versions_kept
+  noncurrent_days          = var.noncurrent_days
 
   depends_on = [google_project_service.apis]
 }
 
-resource "google_kms_crypto_key_iam_member" "gcs_agent" {
-  count = var.bucket_cmek_enabled ? 1 : 0
-
-  crypto_key_id = google_kms_crypto_key.state.id
-  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-  member        = data.google_storage_project_service_account.gcs[0].member
+# The state resources moved into the module. The first plan after the refactor must show these moves and
+# nothing else: 0 to add, 0 to change, 0 to destroy.
+moved {
+  from = google_kms_key_ring.state
+  to   = module.state.google_kms_key_ring.state
 }
 
-# Never add a retention_policy with is_locked = true: a locked policy cannot be undone.
-resource "google_storage_bucket" "state" {
-  # checkov:skip=CKV_GCP_62: access logs need a second bucket (more to protect and pay for); Cloud Audit Logs data access can be enabled on the project instead.
-  name                        = var.state_bucket_name
-  location                    = var.region
-  force_destroy               = false
-  uniform_bucket_level_access = true
-  public_access_prevention    = "enforced"
-
-  labels = {
-    managed-by = "opentofu"
-    purpose    = "tofu-state"
-  }
-
-  versioning {
-    enabled = true
-  }
-
-  # A noncurrent version is deleted only when BOTH conditions hold.
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-    condition {
-      num_newer_versions         = var.noncurrent_versions_kept
-      days_since_noncurrent_time = var.noncurrent_days
-    }
-  }
-
-  dynamic "encryption" {
-    for_each = var.bucket_cmek_enabled ? [1] : []
-    content {
-      default_kms_key_name = google_kms_crypto_key.state.id
-    }
-  }
-
-  lifecycle {
-    prevent_destroy = true
-  }
-
-  depends_on = [google_project_service.apis, google_kms_crypto_key_iam_member.gcs_agent]
+moved {
+  from = google_kms_crypto_key.state
+  to   = module.state.google_kms_crypto_key.state
 }
 
-resource "google_storage_bucket_iam_member" "admins" {
-  for_each = toset(var.state_admins)
-
-  bucket = google_storage_bucket.state.name
-  role   = "roles/storage.objectAdmin"
-  member = each.key
+moved {
+  from = google_kms_crypto_key_iam_member.gcs_agent
+  to   = module.state.google_kms_crypto_key_iam_member.gcs_agent
 }
 
-resource "google_kms_crypto_key_iam_member" "admins" {
-  for_each = toset(var.state_admins)
+moved {
+  from = google_storage_bucket.state
+  to   = module.state.google_storage_bucket.state
+}
 
-  crypto_key_id = google_kms_crypto_key.state.id
-  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
-  member        = each.key
+moved {
+  from = google_storage_bucket_iam_member.admins
+  to   = module.state.google_storage_bucket_iam_member.admins
+}
+
+moved {
+  from = google_kms_crypto_key_iam_member.admins
+  to   = module.state.google_kms_crypto_key_iam_member.admins
 }
