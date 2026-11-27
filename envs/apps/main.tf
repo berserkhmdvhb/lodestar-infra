@@ -76,6 +76,20 @@ module "github_wif" {
   enable_drift               = false
 }
 
+module "ci_planner" {
+  source = "../../modules/gcp-ci-planner"
+
+  project_id        = var.project_id
+  project_number    = var.project_number
+  github_repository = var.ci_github_repository
+  github_owner_id   = var.github_owner_id
+  github_repo_id    = var.ci_github_repo_id
+  sub_claim_prefix  = var.ci_sub_claim_prefix
+  state_bucket      = var.state_bucket
+  state_kms_key_id  = var.state_kms_key_id
+  billing_account   = var.billing_account
+}
+
 module "secrets" {
   source = "../../modules/gcp-secrets"
 

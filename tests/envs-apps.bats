@@ -49,3 +49,7 @@ bad_ids() {
   echo "$output"
   [ "$status" -eq 0 ]
 }
+
+@test "no import block touches the CI planner identity (everything in it is new)" {
+  ! grep -n "ci_planner" "$IMPORTS"
+}
