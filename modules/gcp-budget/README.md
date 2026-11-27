@@ -7,14 +7,14 @@ amount (default 20 EUR) and one alert threshold per entry of `threshold_percents
 
 `billing_account` is required when enabled. It never goes into Git: put it in an untracked `*.tfvars`.
 
-`calendar_period`, the credit types and `all_updates_rule` are left unset (provider defaults). The owner's
-import plan decides whether any of them must be pinned to match the live budget.
+`calendar_period` (default `MONTH`) and `credit_types_treatment` (default `INCLUDE_ALL_CREDITS`) are set to
+match the live budget; `all_updates_rule` is left at the provider default.
 
 ## Provider requirement
 
 With user credentials the Billing Budgets API refuses the call unless the google provider sets
 `user_project_override = true` and `billing_project = "<project>"`. Set both in the root (L1.5).
 
-Inputs: `project_number` (required), `enabled`, `billing_account`, `display_name`, `currency_code`,
+Inputs: `project_number` (required), `enabled`, `billing_account`, `display_name`, `calendar_period`, `credit_types_treatment`, `currency_code`,
 `amount_units`, `threshold_percents`, `spend_basis`.
 Outputs: `budget_name`.

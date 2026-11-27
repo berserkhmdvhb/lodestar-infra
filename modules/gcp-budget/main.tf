@@ -1,5 +1,4 @@
-# calendar_period, credit types and all_updates_rule are left at the provider defaults;
-# the import plan decides whether any must be pinned.
+# all_updates_rule is left at the provider default; the import plan decides whether it must be pinned.
 resource "google_billing_budget" "this" {
   count = var.enabled ? 1 : 0
 
@@ -7,7 +6,9 @@ resource "google_billing_budget" "this" {
   display_name    = var.display_name
 
   budget_filter {
-    projects = ["projects/${var.project_number}"]
+    projects               = ["projects/${var.project_number}"]
+    calendar_period        = var.calendar_period
+    credit_types_treatment = var.credit_types_treatment
   }
 
   amount {

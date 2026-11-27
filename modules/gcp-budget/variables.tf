@@ -26,8 +26,19 @@ variable "project_number" {
 }
 
 variable "display_name" {
+  type        = string
+  description = "Budget name; the live name goes in untracked tfvars."
+  default     = "Monthly budget"
+}
+
+variable "calendar_period" {
   type    = string
-  default = "Monthly budget"
+  default = "MONTH"
+}
+
+variable "credit_types_treatment" {
+  type    = string
+  default = "INCLUDE_ALL_CREDITS"
 }
 
 variable "currency_code" {

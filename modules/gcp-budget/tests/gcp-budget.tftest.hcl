@@ -32,6 +32,13 @@ run "enabled_budget" {
   }
   assert {
     condition = (
+      one(google_billing_budget.this[0].budget_filter).calendar_period == "MONTH"
+      && one(google_billing_budget.this[0].budget_filter).credit_types_treatment == "INCLUDE_ALL_CREDITS"
+    )
+    error_message = "calendar period MONTH and all credits included"
+  }
+  assert {
+    condition = (
       one(one(google_billing_budget.this[0].amount).specified_amount).currency_code == "EUR"
       && one(one(google_billing_budget.this[0].amount).specified_amount).units == "20"
     )
@@ -43,6 +50,20 @@ run "enabled_budget" {
       && alltrue([for t in google_billing_budget.this[0].threshold_rules : t.spend_basis == "CURRENT_SPEND"])
     )
     error_message = "four threshold rules in order with CURRENT_SPEND"
+  }
+}
+
+run "display_name_is_a_variable" {
+  command = plan
+
+  variables {
+    enabled      = true
+    display_name = "Some other name"
+  }
+
+  assert {
+    condition     = google_billing_budget.this[0].display_name == "Some other name"
+    error_message = "display_name must come from the variable"
   }
 }
 

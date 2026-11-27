@@ -72,6 +72,10 @@ run "nat_covers_all_subnets_and_logs_errors" {
     error_message = "NAT: AUTO_ONLY and all subnetworks, all IP ranges"
   }
   assert {
+    condition     = google_compute_router_nat.this.enable_endpoint_independent_mapping == false
+    error_message = "endpoint-independent mapping must be false (as live)"
+  }
+  assert {
     condition = (
       one(google_compute_router_nat.this.log_config).enable == true
       && one(google_compute_router_nat.this.log_config).filter == "ERRORS_ONLY"
