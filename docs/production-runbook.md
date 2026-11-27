@@ -84,13 +84,14 @@ Open a new terminal. It never sources `~/gke-setup.env`.
 
 ```bash
 export PATH="${PWD}/.tools/bin:${PATH}"
+export LODESTAR_ROOT="${PWD}"
 unset GH_REPO
 tofu version
 gcloud auth list --filter=status:ACTIVE --format='value(account)'
 gh auth status
 ```
 
-Expect: `OpenTofu v1.13.9` (if the command is not found, run `make tools` from this root first), your Google
+Expect: `OpenTofu v1.13.9` (`LODESTAR_ROOT` remembers this repository's root for the steps that run in the template; if the command is not found, run `make tools` from this root first), your Google
 account, and a logged-in GitHub account. `unset GH_REPO` matters: `gh` honours that variable over the current
 directory, and the one from the `apps` env file names the template repository.
 
@@ -133,24 +134,20 @@ add later, or scripts and child processes do not see the variable.
 
 ### 0.4 The private tfvars files and the private folder
 
-The two tfvars files are git-ignored. `bootstrap/prod/terraform.tfvars` is written whole (`cat >`, never `>>`:
-appending twice gives `Attribute redefined`); `envs/prod/terraform.tfvars` is copied once and filled in by hand in
-step 3.
+The two tfvars files are git-ignored. `envs/prod/terraform.tfvars` is copied once here and filled in by hand in
+step 3. `bootstrap/prod/terraform.tfvars` is written at the end of step 1, once the project ID is known to be free
+(always with `cat >`, never `>>`: appending twice gives `Attribute redefined`).
 
 ✏️
 
 ```bash
 mkdir -p ~/platform-config
 chmod 700 ~/platform-config
-cat > bootstrap/prod/terraform.tfvars <<EOF
-project_id        = "${PROD_PROJECT_ID}"
-state_bucket_name = "${PROD_PROJECT_ID}-tofu-state"
-EOF
 [ -e envs/prod/terraform.tfvars ] || cp envs/prod/terraform.tfvars.example envs/prod/terraform.tfvars
 git status --porcelain bootstrap/prod envs/prod
 ```
 
-Expect: no output from `git status` (both files are ignored). The state bucket name must be globally unique;
+Expect: no output from `git status` (the file is ignored). The state bucket name must be globally unique;
 a clash shows up as an error in step 2, and you then edit the name in the file. If `git status` lists a tfvars
 file: stop, it is not ignored.
 
@@ -192,6 +189,18 @@ printf '%s\n' "${PROD_PROJECT_NUMBER}"
 ```
 
 Expect: `True`, then a 10 to 12 digit number. Nothing that costs money works before billing is on.
+
+✏️ Now that the ID is yours, write the bootstrap's tfvars (whole file, safe to repeat).
+
+```bash
+cat > bootstrap/prod/terraform.tfvars <<EOF
+project_id        = "${PROD_PROJECT_ID}"
+state_bucket_name = "${PROD_PROJECT_ID}-tofu-state"
+EOF
+git status --porcelain bootstrap/prod
+```
+
+Expect: no output (the file is git-ignored). If you later change the project ID, run this block again.
 
 ## 2. The production bootstrap: state bucket and key
 
@@ -237,7 +246,7 @@ printf 'bucket=%s\nkey=%s\n' "${BUCKET}" "${KEY}"
 
 Expect: both lines carry a value (the key is `projects/<project>/locations/europe-west1/keyRings/tofu-state/cryptoKeys/tofu-state`).
 
-✏️ Now run the two `cat > bootstrap/prod/override.tf` blocks and the `init -migrate-state` of
+✏️ Now run the first `cat > bootstrap/prod/override.tf` block (the one with the fallback) and its `init -migrate-state` of
 [`bootstrap/prod/README.md`, section 3](../bootstrap/prod/README.md#3-migrate-the-state-into-the-bucket-encrypted),
 in this terminal (they read `${BUCKET}` and `${KEY}`). The first `override.tf` has the fallback to plain state; answer
 `yes` to copying the state. Then the proof, before anything is deleted:
@@ -322,8 +331,9 @@ printf 'state_bucket=%s\nstate_kms_key_id=%s\n' "$(tofu -chdir=bootstrap/prod ou
 
 Expect: both values. Rules the variables enforce: service keys are generic and 3 to 20 characters (they build the
 pool IDs `gh-<key>` and appear in resource addresses), `deployer_account_id` is 6 to 30 characters and unique,
-`sub_claim_prefix` must equal the one built from that entry's owner, repository and IDs. Leave `region`,
-`node_locations` and `budget_display_name` at their defaults: CI cannot set them. Edit the file, do not append to it.
+`sub_claim_prefix` must equal the one built from that entry's owner, repository and IDs. CI sets `region` and
+`node_locations` itself (`TF_PROD_REGION`, `TF_PROD_NODE_LOCATIONS`, step 4), so they must match the tfvars; leave
+`budget_display_name` and `state_prefix` at their defaults, because CI cannot set them. Edit the file, do not append to it.
 
 ### 3.2 Init and plan
 
@@ -696,20 +706,20 @@ kubectl -n cloudflared rollout status deployment/cloudflared --timeout=180s
 Expect: `condition met`, then `deployment "cloudflared" successfully rolled out`. If the wait times out:
 `kubectl -n cloudflared describe externalsecret tunnel-token`; a permission error means the grant of 6.3 is missing.
 
-The template's connector spreads its replicas over nodes (`kubernetes.io/hostname`, `ScheduleAnyway`), which does not
-by itself put them in different zones. Add the zone spread; a strategic merge adds it next to the existing rule, and a
-later `kubectl apply -f deployment.yaml` keeps it.
+The template's connector deployment spreads its replicas over nodes and over zones
+(`topology.kubernetes.io/zone`, `ScheduleAnyway`), so no patch is needed. Close its network:
 
 ✏️
 
 ```bash
-kubectl -n cloudflared patch deployment cloudflared -p '{"spec":{"template":{"spec":{"topologySpreadConstraints":[{"maxSkew":1,"topologyKey":"topology.kubernetes.io/zone","whenUnsatisfiable":"DoNotSchedule","labelSelector":{"matchLabels":{"app":"cloudflared"}}}]}}}}'
-kubectl -n cloudflared rollout status deployment/cloudflared --timeout=180s
 kubectl apply -f deploy/cloudflared/networkpolicy.yaml
+kubectl -n cloudflared rollout restart deployment/cloudflared
+kubectl -n cloudflared rollout status deployment/cloudflared --timeout=180s
 ```
 
-Expect: `deployment.apps/cloudflared patched`, the rollout completes, and the policy is `created`. Keep `replicas` at 2 or
-more: with 1 the zone rule and the budget protect nothing.
+Expect: the policy `created`, `deployment.apps/cloudflared restarted`, and the rollout completing. The restart makes
+new connections under the policy, so the check below cannot pass on connections made before it. Keep `replicas` at 2
+or more: with 1 the zone rule and the budget protect nothing.
 
 🔍 Two Pods, in two different zones, and a budget that lets one go at a time.
 
@@ -718,13 +728,14 @@ kubectl -n cloudflared get pods -l app=cloudflared -o json | jq -r '.items[].spe
   kubectl get node "${NODE}" -L topology.kubernetes.io/zone --no-headers
 done
 kubectl -n cloudflared get pdb cloudflared
-kubectl -n cloudflared logs deployment/cloudflared | grep -m 4 'Registered tunnel connection'
+kubectl -n cloudflared logs deployment/cloudflared --since=3m | grep -c 'Registered tunnel connection'
 ```
 
 Expect: two node lines ending in different zones (`europe-west1-b` and `europe-west1-c`); the budget with
-`MIN AVAILABLE 1` and `ALLOWED DISRUPTIONS 1`; and up to 4 `Registered tunnel connection` lines. In the Cloudflare
-dashboard the tunnel `prod` shows Healthy. If both Pods share a zone, the cluster has one node in one zone: check
-`kubectl get nodes -L topology.kubernetes.io/zone` (7.5).
+`MIN AVAILABLE 1` and `ALLOWED DISRUPTIONS 1`; and a count of 1 or more `Registered tunnel connection` lines (the connector reaches Cloudflare through the policy). In the Cloudflare
+dashboard the tunnel `prod` shows Healthy. If both Pods share a zone, a zone had no Ready node when they were scheduled (the rule is best effort): check
+`kubectl get nodes -L topology.kubernetes.io/zone`, and once nodes in both zones are Ready run
+`kubectl -n cloudflared rollout restart deployment/cloudflared` and check again.
 
 ## 7. Verification
 
@@ -831,7 +842,7 @@ while IFS=$'\t' read -r -u 3 SVC_KEY SVC_NAME DEP_ID REPO_NAME; do
   if [ -n "${OTHER}" ]; then
     probe "${SVC_NAME}-production" probe-other "${OTHER}"
     kubectl -n "${SVC_NAME}-production" wait externalsecret/probe-other --for=condition=Ready=false --timeout=60s
-    kubectl -n external-secrets logs deployment/external-secrets --tail=500 | grep '"name":"probe-other"' | grep -m1 -o 'PermissionDenied'
+    kubectl -n external-secrets logs deployment/external-secrets --tail=500 | grep '"name":"probe-other"' | grep "\"namespace\":\"${SVC_NAME}-production\"" | grep -m1 -o 'PermissionDenied'
     kubectl -n "${SVC_NAME}-production" delete externalsecret probe-other
   fi
   kubectl -n "${SVC_NAME}-production" delete externalsecret probe-own
@@ -885,11 +896,11 @@ database (Cloud SQL) come with that database, in its own design.
 
 ```bash
 while IFS=$'\t' read -r -u 3 SVC_KEY SVC_NAME SECRET_KEY; do
-  gcloud secrets versions list "${SVC_NAME}-production-${SECRET_KEY}" --project "${PROD_PROJECT_ID}" --format='value(name,state)'
+  gcloud secrets versions list "${SVC_NAME}-production-${SECRET_KEY}" --project "${PROD_PROJECT_ID}" --format='value(name.basename(),state)'
 done 3< ~/platform-config/prod-secrets.tsv
 ```
 
-Expect: `1	ENABLED` for each secret, nothing else. Rotation is the same command, which adds version 2; it does not delete
+Expect: one line `1	ENABLED` (the version number, then the state) per secret, nothing else. Rotation is the same command, which adds version 2; it does not delete
 version 1. Now run 7.7.
 
 ## 9. The template's `production` environment variables
@@ -901,31 +912,51 @@ template's settings script will gain support for this (template task 11.3); unti
 `production` environment must already exist in each repository (the settings script of the template creates it): on a
 `404` for the environment, create it first, with its reviewers and its `v*` tag rule.
 
+Run from this repository's root (step 6 left you in the template), with `GH_REPO` unset (step 0.2).
+
 🔍 The values to be set (no secret among them; the WIF provider and the deployer account are identifiers):
 
 ```bash
+cd "${LODESTAR_ROOT}"
+pwd
 tofu -chdir=envs/prod output
 ```
 
-Expect: `GCP_PROJECT_ID`, `GKE_CLUSTER = "prod"`, `GKE_LOCATION = "europe-west1"`, the maps `GCP_WIF_PROVIDER` and
+Expect: this repository's root, then `GCP_PROJECT_ID`, `GKE_CLUSTER = "prod"`, `GKE_LOCATION = "europe-west1"`, the maps `GCP_WIF_PROVIDER` and
 `GCP_DEPLOYER_SA` with one entry per service key, `CI_WIF_PROVIDER`, `CI_SERVICE_ACCOUNT`,
 `CLOUDFLARED_TUNNEL_TOKEN_SECRET_ID` and `dns_endpoint`.
 
-✏️ Set them in every service repository. `GH_REPO` must be unset (step 0.2).
+✏️ Set them in every service repository. The outputs are read once; any empty value stops the loop before a variable is set.
 
 ```bash
-while IFS=$'\t' read -r -u 3 SVC_KEY SVC_NAME DEP_ID REPO_NAME; do
-  gh variable set GCP_PROJECT_ID --env production --body "$(tofu -chdir=envs/prod output -raw GCP_PROJECT_ID)" -R "${REPO_NAME}"
-  gh variable set GKE_CLUSTER --env production --body "$(tofu -chdir=envs/prod output -raw GKE_CLUSTER)" -R "${REPO_NAME}"
-  gh variable set GKE_LOCATION --env production --body "$(tofu -chdir=envs/prod output -raw GKE_LOCATION)" -R "${REPO_NAME}"
-  gh variable set GCP_WIF_PROVIDER --env production --body "$(tofu -chdir=envs/prod output -json GCP_WIF_PROVIDER | jq -r --arg k "${SVC_KEY}" '.[$k]')" -R "${REPO_NAME}"
-  gh variable set GCP_DEPLOYER_SA --env production --body "$(tofu -chdir=envs/prod output -json GCP_DEPLOYER_SA | jq -r --arg k "${SVC_KEY}" '.[$k]')" -R "${REPO_NAME}"
-done 3< ~/platform-config/prod-services.tsv
+cd "${LODESTAR_ROOT}"
+OUT_PROJECT="$(tofu -chdir=envs/prod output -raw GCP_PROJECT_ID)"
+OUT_CLUSTER="$(tofu -chdir=envs/prod output -raw GKE_CLUSTER)"
+OUT_LOCATION="$(tofu -chdir=envs/prod output -raw GKE_LOCATION)"
+OUT_WIF="$(tofu -chdir=envs/prod output -json GCP_WIF_PROVIDER)"
+OUT_SA="$(tofu -chdir=envs/prod output -json GCP_DEPLOYER_SA)"
+if [ -z "${OUT_PROJECT}" ] || [ -z "${OUT_CLUSTER}" ] || [ -z "${OUT_LOCATION}" ] || [ -z "${OUT_WIF}" ] || [ -z "${OUT_SA}" ]; then
+  printf 'an output is empty: stop\n'
+else
+  while IFS=$'\t' read -r -u 3 SVC_KEY SVC_NAME DEP_ID REPO_NAME; do
+    WIF="$(printf '%s' "${OUT_WIF}" | jq -r --arg k "${SVC_KEY}" '.[$k] // empty')"
+    SA="$(printf '%s' "${OUT_SA}" | jq -r --arg k "${SVC_KEY}" '.[$k] // empty')"
+    if [ -z "${WIF}" ] || [ -z "${SA}" ]; then
+      printf 'no output for service key %s: skipped\n' "${SVC_KEY}"
+      continue
+    fi
+    gh variable set GCP_PROJECT_ID --env production --body "${OUT_PROJECT}" -R "${REPO_NAME}"
+    gh variable set GKE_CLUSTER --env production --body "${OUT_CLUSTER}" -R "${REPO_NAME}"
+    gh variable set GKE_LOCATION --env production --body "${OUT_LOCATION}" -R "${REPO_NAME}"
+    gh variable set GCP_WIF_PROVIDER --env production --body "${WIF}" -R "${REPO_NAME}"
+    gh variable set GCP_DEPLOYER_SA --env production --body "${SA}" -R "${REPO_NAME}"
+  done 3< ~/platform-config/prod-services.tsv
+fi
 ```
 
-Expect: one `Created variable ...` (or `Updated variable ...`) line per command. A `jq` result `null` means the key
-is not in the output: `tofu -chdir=envs/prod output -json GCP_WIF_PROVIDER` shows the keys. A variable set to the word
-`null` is wrong: set it again.
+Expect: one `Created variable ...` (or `Updated variable ...`) line per command. `an output is empty: stop` means
+the `envs/prod` apply did not finish; `no output for service key <key>` means that key is not in
+`tofu -chdir=envs/prod output -json GCP_WIF_PROVIDER` (compare it with the tfvars). Nothing is set in either case.
 
 🔍 Names only per repository, never a value to paste anywhere public:
 
@@ -945,8 +976,8 @@ platform rollout.
 
 A short list; nothing here has been run.
 
-- **`deletion_protection`** on the cluster: a destroy of `module.gke` is refused until the module sets it to
-  `false` and that change is applied. Nothing but a deliberate edit turns it off.
+- **`deletion_protection`** on the cluster: a destroy of `module.gke` is refused until `envs/prod/main.tf` passes
+  `deletion_protection = false` to the module and that change is applied. Nothing but a deliberate edit turns it off.
 - **`prevent_destroy`** on the production state key ring, key and bucket (`bootstrap/prod`), and on the secrets key
   ring and key (`envs/prod`): a plan that would destroy them fails. Cloud KMS keeps key names and never fully
   deletes a ring. Never remove the protection to "clean up".
