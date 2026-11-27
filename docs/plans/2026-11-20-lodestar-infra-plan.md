@@ -203,6 +203,21 @@ This pulls the Google half of L3.1 forward, because the import needs a root. `en
 - **Review:** clean.
 - **The phase review** found four Important issues: a wrong expected cluster diff; a bootstrap migration that could silently do nothing and then lose the state; no attribute-level check of in-place updates; and this plan not being updated. One fix wave corrected the runbook and READMEs. The controller updated this plan.
 
+### Task L1.6: Static CI and repository hygiene (added 2026-11-27, owner go; supersedes L3.2)
+The repository is public and manages live infrastructure, so CI moves from the last phase to now. It uses no cloud credentials.
+**Files:** `.github/workflows/ci.yml`, `.github/workflows/pr-title.yml`, `.github/workflows/scorecard.yml`, `.github/dependabot.yml`, `.github/zizmor.yml`, `.github/CODEOWNERS`, `.github/pull_request_template.md`, `scripts/github-settings.sh`, and README.
+- [ ] **`ci.yml`:** the same gates as `make check`, with the same pinned tools installed by `make tools` (local and CI parity). That is fmt-check, validate with `-backend=false`, tflint, checkov, `tofu test`, bats, shellcheck and gitleaks, plus actionlint and zizmor. One aggregated required check, `CI OK`. Every action is SHA-pinned; there are timeouts, `concurrency`, read-only `permissions`, and `persist-credentials: false`.
+- [ ] **PR title check** (Conventional Commits), **Dependabot** (GitHub Actions, plus the OpenTofu/Terraform providers for each root and module), and **OpenSSF Scorecard**. The template's patterns are reused, adapted to this repository.
+- [ ] **`scripts/github-settings.sh`:** dry-run by default, `--apply` explicit. It sets a `main` ruleset (PRs only, `CI OK` and the PR-title check required, squash only, no force-push or deletion), security settings, and Dependabot alerts. The owner runs it once with their own `gh` login.
+- [ ] **Tests:** bats for the settings script's dry run, and actionlint and zizmor clean. Before it is called green, CI parity is checked in a runner-like fresh clone with only CI's tools.
+
+### Task L1.7: PR plans and weekly drift, with a read-only keyless identity (added 2026-11-27, owner go)
+**Files:** `modules/gcp-ci-planner` (or an extension of `gcp-github-wif`), the `envs/apps` wiring, `.github/workflows/plan.yml`, `.github/workflows/drift.yml`, and docs.
+- [ ] **Identity:** a Workload Identity provider and a planner service account limited to this repository, using its immutable owner and repository IDs, `job_workflow_ref` pinned to `plan.yml` and `drift.yml`, and the PR and `main` refs. Read-only roles: viewer-level reads, the state bucket's object read, KMS decrypt on the state key, and nothing that writes. Plans run with `-lock=false`.
+- [ ] **`plan.yml`:** on PRs from this repository (never from forks), `tofu plan` for `envs/apps`. The summary goes into the job summary, never the full plan in a public log. The plan file is never uploaded.
+- [ ] **`drift.yml`:** weekly and on demand. `tofu plan -detailed-exitcode`; on drift it opens or updates one issue, with the summary only.
+- [ ] **Owner acceptance:** the owner applies the identity from a reviewed plan ("N to add, 0 to change, 0 to destroy"). A PR shows its plan summary, and a drift run reports "No changes".
+
 ### Task L2.1: Cloudflare zone baseline
 **Files:** `modules/cloudflare-zone`. It covers:
 - the zone settings: Full (strict), Always Use HTTPS, TLS 1.2 minimum, TLS 1.3, Automatic HTTPS Rewrites, and HSTS staged through a variable;
@@ -226,7 +241,8 @@ The registrar stays manual.
 - [ ] **Also add a service-level module** for routes and Access applications per app, used by the template and Kynosura (`modules/app-edge`).
 
 ### Task L3.2: CI
-**Files:** `.github/workflows/ci.yml`, with no credentials. It runs fmt-check, validate (with `-backend=false`), tflint, checkov, `tofu test`, gitleaks and actionlint, plus zizmor on itself. Every action is SHA-pinned; there are timeouts, `concurrency`, and read-only permissions.
+**Superseded (2026-11-27) by L1.6 and L1.7.** What remains here: extend the CI to the Cloudflare roots once phase 2 exists.
+**Files (original):** `.github/workflows/ci.yml`, with no credentials. It runs fmt-check, validate (with `-backend=false`), tflint, checkov, `tofu test`, gitleaks and actionlint, plus zizmor on itself. Every action is SHA-pinned; there are timeouts, `concurrency`, and read-only permissions.
 
 ### Task L3.3: Docs
 **Files:** `docs/apply-runbook.md` and `docs/mapping.md`.
