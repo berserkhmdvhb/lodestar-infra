@@ -70,6 +70,9 @@ resource "google_service_account_iam_member" "wif" {
   service_account_id = google_service_account.deployer[each.key].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principal://iam.googleapis.com/${local.pool_name}/subject/${var.sub_claim_prefix}:environment:${each.key}"
+
+  # A principal:// member is rejected until its pool exists.
+  depends_on = [google_iam_workload_identity_pool.github]
 }
 
 resource "google_project_iam_member" "cluster" {

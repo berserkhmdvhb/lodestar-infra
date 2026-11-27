@@ -1,7 +1,7 @@
 # Service Usage is required in the project by the production env root, whose provider bills requests to the project (user_project_override).
 # The APIs belong to the project, not to the state module, so each bootstrap root enables its own.
 resource "google_project_service" "apis" {
-  for_each = toset(["cloudkms.googleapis.com", "storage.googleapis.com", "serviceusage.googleapis.com"])
+  for_each = toset(["cloudkms.googleapis.com", "storage.googleapis.com", "serviceusage.googleapis.com", "cloudresourcemanager.googleapis.com"])
 
   service            = each.key
   disable_on_destroy = false

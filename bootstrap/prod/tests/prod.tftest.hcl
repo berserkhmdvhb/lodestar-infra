@@ -20,8 +20,8 @@ run "apis_include_serviceusage" {
     error_message = "Service Usage must be enabled (the production env root bills requests to the project)"
   }
   assert {
-    condition     = length(google_project_service.apis) == 3
-    error_message = "cloudkms, storage and serviceusage"
+    condition     = length(google_project_service.apis) == 4
+    error_message = "cloudkms, storage, serviceusage and cloudresourcemanager"
   }
 }
 
