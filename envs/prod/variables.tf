@@ -45,6 +45,11 @@ variable "services" {
   }
 
   validation {
+    condition     = alltrue([for s in values(var.services) : !startswith(s.deployer_account_id, "gh-drift-")])
+    error_message = "deployer_account_id must not start with gh-drift-: that prefix is the drift readers' (gh-drift-<service key>)."
+  }
+
+  validation {
     condition     = alltrue([for s in values(var.services) : can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", s.deployer_account_id))])
     error_message = "deployer_account_id must be 6 to 30 characters: a lowercase letter, then lowercase letters, digits or hyphens, ending in a letter or digit."
   }

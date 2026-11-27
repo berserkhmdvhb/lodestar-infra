@@ -35,8 +35,8 @@ Inputs: `project_id`, `project_number`, `github_repository`, `github_owner_id`, 
 `null`), `deployer_account_ids` (service account ID per environment; default `gh-deployer-<env>`), `drift_environments` (default `null`: every environment; else a subset) and `drift_account_ids` (default `gh-drift-<env>`).
 The module serves one repository. For several, call it once per repository with its own `pool_id`. Some names are
 project-wide, so every call in one project must follow these rules: pass `environments = ["production"]`; give each
-call a unique `deployer_account_ids` entry; let at most one call set `create_custom_connect_role` (the role
+call a unique `deployer_account_ids` entry and, with drift on, a unique `drift_account_ids` entry (the default `gh-drift-<env>` collides); let at most one call set `create_custom_connect_role` (the role
 `gkeDnsConnect`); keep `enable_previews` off (`gh-deployer-preview`; refused while `allowed_environment` is set); `enable_drift` is allowed with `allowed_environment` only when `drift_environments` is exactly `[allowed_environment]` (refused
-otherwise). Every deployer ID, default or given, is validated to 6 to 30 characters.
+otherwise). Every deployer and drift ID, default or given, is validated to 6 to 30 characters.
 Outputs: `workload_identity_provider`, `deployer_emails`, `preview_workload_identity_provider`,
 `drift_workload_identity_providers`, `drift_service_accounts`, `drift_condition`, `drift_cluster_roles`, `drift_wif_members`.

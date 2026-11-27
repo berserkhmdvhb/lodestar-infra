@@ -302,6 +302,16 @@ run "duplicate_service_name_rejected" {
   expect_failures = [var.services]
 }
 
+run "deployer_id_with_the_drift_prefix_rejected" {
+  command = plan
+  variables {
+    services = {
+      a-svc = { service_name = "one-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o@1/a@2", deployer_account_id = "gh-drift-a-svc", secret_keys = [] }
+    }
+  }
+  expect_failures = [var.services]
+}
+
 run "short_deployer_id_rejected" {
   command = plan
   variables {

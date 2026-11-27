@@ -390,7 +390,7 @@ Expect: your S and K, and N equal to the `Plan: N to add` of 3.2. If they differ
 tofu -chdir=envs/prod show -no-color prod.tfplan | awk '/ will be created$/ {split($2, a, "."); print a[1] "." a[2]}' | sort | uniq -c
 ```
 
-Expect: one count per module as in the table (for example `5 module.github_wif["web"]`). A module with a different
+Expect: one count per module as in the table (for example `9 module.github_wif["web"]`). A module with a different
 count tells you which resource is missing or extra; paste it.
 
 ### 3.4 Nothing may be destroyed or replaced
@@ -547,14 +547,15 @@ cat ~/platform-config/prod-services.tsv
 Expect: one row per service: key, service name, deployer account ID, repository.
 
 ✏️ Run the block once per service, from that service's template-derived repository root (a service that does not use
-the template's bootstrap follows its own guide for the namespace and the Role). Set the two values from its row. It
+the template's bootstrap follows its own guide for the namespace and the Role). Set the three values from its row (`KEY` is the service key; the drift account is `gh-drift-<key>`, the `DRIFT_SA` output of step 9). It
 renders and applies only; the render never contacts the cluster.
 
 ```bash
 SVC="your-service-name"
 DEP="gh-deployer-web"
+KEY="web"
 export PATH="${PWD}/.tools/bin:${PATH}"
-printf 'deployer:\n  name: %s@%s.iam.gserviceaccount.com\n' "${DEP}" "${PROD_PROJECT_ID}" > ~/platform-config/bootstrap-values-${SVC}-production.yaml
+printf 'deployer:\n  name: %s@%s.iam.gserviceaccount.com\ndrift:\n  name: gh-drift-%s@%s.iam.gserviceaccount.com\n' "${DEP}" "${PROD_PROJECT_ID}" "${KEY}" "${PROD_PROJECT_ID}" > ~/platform-config/bootstrap-values-${SVC}-production.yaml
 scripts/k8s-bootstrap.sh production --release "${SVC}" --values ~/platform-config/bootstrap-values-${SVC}-production.yaml > ~/platform-config/bootstrap-${SVC}-production.yaml
 yq 'select(.kind == "Namespace")' ~/platform-config/bootstrap-${SVC}-production.yaml | kubectl apply -f -
 kubectl apply --dry-run=server -f ~/platform-config/bootstrap-${SVC}-production.yaml
@@ -573,7 +574,22 @@ kubectl auth can-i create deployments -n "${SVC}-production" --as="${DEP}@${PROD
 kubectl auth can-i create resourcequotas -n "${SVC}-production" --as="${DEP}@${PROD_PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
-Expect: `yes`, then `no`. Repeat the whole of 6.1 for every row of the list.
+Expect: `yes`, then `no`.
+
+🔍 The drift reader (step 9) may read the service's objects and nothing more: it can list, not patch or delete, and
+cannot read a Secret:
+
+```bash
+who="gh-drift-${KEY}@${PROD_PROJECT_ID}.iam.gserviceaccount.com"
+printf '%s %s %s %s %s\n' \
+  "$(kubectl auth can-i list deployments.apps -n "${SVC}-production" --as="${who}")" \
+  "$(kubectl auth can-i patch deployments.apps -n "${SVC}-production" --as="${who}")" \
+  "$(kubectl auth can-i delete configmaps -n "${SVC}-production" --as="${who}")" \
+  "$(kubectl auth can-i get secrets -n "${SVC}-production" --as="${who}")" \
+  "$(kubectl auth can-i list secrets -n "${SVC}-production" --as="${who}")"
+```
+
+Expect: `yes no no no no`. Repeat the whole of 6.1 for every row of the list.
 
 ### 6.2 External Secrets, the same chart version as `apps`
 
@@ -968,10 +984,10 @@ Expect: one `Created variable ...` (or `Updated variable ...`) line per command.
 the `envs/prod` apply did not finish; `no output for service key <key>` means that key is not in
 `tofu -chdir=envs/prod output -json GCP_WIF_PROVIDER` (compare it with the tfvars). Nothing is set in either case.
 
-✏️ The same for the live-drift check: the environment `drift-production` in each service repository. It must exist
-first (the template's GKE guide 12.6, part 4: no required reviewers, deployments limited to `main`; the in-cluster
-read-only RBAC is the namespace bootstrap of 6.1 with `drift.name` set). `GKE_LOCATION` is the region output of
-step 3, the same value as above, and `EDGE_DOMAIN` is copied from that repository's `production` environment. An
+✏️ The same for the live-drift check: the environment `drift-production` in each service repository, with no required
+reviewers (the weekly run never waits) and deployments limited to `main`, the one ref the provider admits. Only the two
+creation commands of the template guide 12.6 (part 4) are used, below; `DRIFT_ENABLED` is not set here (it comes after the first deploy). The in-cluster read-only RBAC is the
+namespace bootstrap of 6.1, which sets `drift.name`. `GKE_LOCATION` is the same value as above, and `EDGE_DOMAIN` is copied from that repository's `production` environment. An
 empty output stops the loop, as before.
 
 ```bash
@@ -992,6 +1008,8 @@ else
       printf 'nothing for service key %s: skipped\n' "${SVC_KEY}"
       continue
     fi
+    gh api -X PUT "repos/${REPO_NAME}/environments/drift-production" -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true' >/dev/null
+    gh api -X POST "repos/${REPO_NAME}/environments/drift-production/deployment-branch-policies" -f name=main -f type=branch >/dev/null
     gh variable set GCP_PROJECT_ID --env drift-production --body "${OUT_PROJECT}" -R "${REPO_NAME}"
     gh variable set GKE_CLUSTER --env drift-production --body "${OUT_CLUSTER}" -R "${REPO_NAME}"
     gh variable set GKE_LOCATION --env drift-production --body "${OUT_LOCATION}" -R "${REPO_NAME}"
@@ -1005,7 +1023,7 @@ fi
 Expect: six `Created variable ...` (or `Updated variable ...`) lines per service. `an output is empty: stop` means the
 `envs/prod` apply did not finish; `nothing for service key <key>` means that key has no drift output or no
 `EDGE_DOMAIN` on its `production` environment yet. Nothing is set in either case. `DRIFT_ENABLED` is the template's
-repository variable and stays unset until after the first deploy (template guide 12.6, part 4).
+repository variable and stays unset until after the first deploy; set it then (template guide 12.6, part 4).
 
 🔍 Names only per repository, never a value to paste anywhere public:
 
@@ -1017,8 +1035,19 @@ while IFS=$'\t' read -r -u 3 SVC_KEY SVC_NAME DEP_ID REPO_NAME; do
 done 3< ~/platform-config/prod-services.tsv
 ```
 
-Expect: per repository, `GCP_DEPLOYER_SA GCP_PROJECT_ID GCP_WIF_PROVIDER GKE_CLUSTER GKE_LOCATION`, plus whatever else the
-template put in that environment (for example `EDGE_DOMAIN`). Deploys stay off (`DEPLOY_ENABLED` unset) until the
+Expect: per repository, `GCP_DEPLOYER_SA GCP_PROJECT_ID GCP_WIF_PROVIDER GKE_CLUSTER GKE_LOCATION`, plus whatever else the template put in `production` (for example `EDGE_DOMAIN`).
+
+🔍 The same for the drift environment:
+
+```bash
+while IFS=$'\t' read -r -u 3 SVC_KEY SVC_NAME DEP_ID REPO_NAME; do
+  printf '%s: ' "${REPO_NAME}"
+  gh variable list --env drift-production -R "${REPO_NAME}" | cut -f1 | sort | tr '\n' ' '
+  printf '\n'
+done 3< ~/platform-config/prod-services.tsv
+```
+
+Expect: per repository, `drift-production` has exactly `DRIFT_SA DRIFT_WIF_PROVIDER EDGE_DOMAIN GCP_PROJECT_ID GKE_CLUSTER GKE_LOCATION`. Deploys stay off (`DEPLOY_ENABLED` unset) until the
 platform rollout.
 
 ## 10. Rollback and teardown notes
