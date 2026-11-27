@@ -1,0 +1,40 @@
+# OpenTofu native state encryption, for every root that keeps its state in the state bucket.
+# Copy this block into the root's terraform {} block (or an untracked override.tf). OpenTofu >= 1.8
+# allows variables here. kms_key_id is the `kms_key_id` output of bootstrap/
+# (projects/<project>/locations/<region>/keyRings/<ring>/cryptoKeys/<key>).
+#
+# Migration only: add `fallback { method = method.unencrypted.migrate }` inside the state and plan
+# blocks, a `method "unencrypted" "migrate" {}` block, and set enforced = false; remove all three
+# once the state is encrypted.
+
+variable "kms_key_id" {
+  type        = string
+  description = "Full id of the Cloud KMS key that encrypts state and plans."
+}
+
+terraform {
+  backend "gcs" {
+    # bucket and prefix come from -backend-config (backends cannot use variables)
+  }
+
+  encryption {
+    key_provider "gcp_kms" "state" {
+      kms_encryption_key = var.kms_key_id
+      key_length         = 32
+    }
+
+    method "aes_gcm" "state" {
+      keys = key_provider.gcp_kms.state
+    }
+
+    state {
+      method   = method.aes_gcm.state
+      enforced = true
+    }
+
+    plan {
+      method   = method.aes_gcm.state
+      enforced = true
+    }
+  }
+}
