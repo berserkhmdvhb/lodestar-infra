@@ -223,9 +223,9 @@ This pulls the Google half of L3.1 forward, because the import needs a root. `en
 ### Task L1.6: Static CI and repository hygiene (added 2026-11-27, owner go; supersedes L3.2)
 The repository is public and manages live infrastructure, so CI moves from the last phase to now. It uses no cloud credentials.
 **Files:** `.github/workflows/ci.yml`, `.github/workflows/pr-title.yml`, `.github/workflows/scorecard.yml`, `.github/dependabot.yml`, `.github/zizmor.yml`, `.github/CODEOWNERS`, `.github/pull_request_template.md`, `scripts/github-settings.sh`, and README.
-- [ ] **`ci.yml`:** the same gates as `make check`, with the same pinned tools installed by `make tools` (local and CI parity). That is fmt-check, validate with `-backend=false`, tflint, checkov, `tofu test`, bats, shellcheck and gitleaks, plus actionlint and zizmor. One aggregated required check, `CI OK`. Every action is SHA-pinned; there are timeouts, `concurrency`, read-only `permissions`, and `persist-credentials: false`.
-- [ ] **PR title check** (Conventional Commits), **Dependabot** (GitHub Actions, plus the OpenTofu/Terraform providers for each root and module), and **OpenSSF Scorecard**. The template's patterns are reused, adapted to this repository.
-- [ ] **`scripts/github-settings.sh`:** dry-run by default, `--apply` explicit. It sets a `main` ruleset (PRs only, `CI OK` and the PR-title check required, squash only, no force-push or deletion), security settings, and Dependabot alerts. The owner runs it once with their own `gh` login.
+- [x] **`ci.yml`:** the same gates as `make check`, with the same pinned tools installed by `make tools` (local and CI parity). That is fmt-check, validate with `-backend=false`, tflint, checkov, `tofu test`, bats, shellcheck and gitleaks, plus actionlint and zizmor. One aggregated required check, `CI OK`. Every action is SHA-pinned; there are timeouts, `concurrency`, read-only `permissions`, and `persist-credentials: false`.
+- [x] **PR title check** (Conventional Commits), **Dependabot** (GitHub Actions, plus the OpenTofu/Terraform providers for each root and module), and **OpenSSF Scorecard**. The template's patterns are reused, adapted to this repository.
+- [x] **`scripts/github-settings.sh`:** dry-run by default, `--apply` explicit. It sets a `main` ruleset (PRs only, `CI OK` and the PR-title check required, squash only, no force-push or deletion), security settings, and Dependabot alerts. The owner runs it once with their own `gh` login.
 - [x] **Tests:** bats for the settings script's dry run, and actionlint and zizmor clean. Before it is called green, CI parity is checked in a runner-like fresh clone with only CI's tools.
 
 **Executed (2026-11-27, commits 3cf8bae, 0ca2c44, eb92707, a09cff2 and 42da6b4; built in an isolated worktree and rebased onto main):**
@@ -246,9 +246,24 @@ The repository is public and manages live infrastructure, so CI moves from the l
 
 ### Task L1.7: PR plans and weekly drift, with a read-only keyless identity (added 2026-11-27, owner go)
 **Files:** `modules/gcp-ci-planner` (or an extension of `gcp-github-wif`), the `envs/apps` wiring, `.github/workflows/plan.yml`, `.github/workflows/drift.yml`, and docs.
-- [ ] **Identity:** a Workload Identity provider and a planner service account limited to this repository, using its immutable owner and repository IDs, `job_workflow_ref` pinned to `plan.yml` and `drift.yml`, and the PR and `main` refs. Read-only roles: viewer-level reads, the state bucket's object read, KMS decrypt on the state key, and nothing that writes. Plans run with `-lock=false`.
-- [ ] **`plan.yml`:** on PRs from this repository (never from forks), `tofu plan` for `envs/apps`. The summary goes into the job summary, never the full plan in a public log. The plan file is never uploaded.
-- [ ] **`drift.yml`:** weekly and on demand. `tofu plan -detailed-exitcode`; on drift it opens or updates one issue, with the summary only.
+- [x] **Identity:** a Workload Identity provider and a planner service account limited to this repository, using its immutable owner and repository IDs, `job_workflow_ref` pinned to `plan.yml` and `drift.yml`, and the PR and `main` refs. Read-only roles: viewer-level reads, the state bucket's object read, KMS decrypt on the state key, and nothing that writes. Plans run with `-lock=false`.
+- [x] **`plan.yml`:** on PRs from this repository (never from forks), `tofu plan` for `envs/apps`. The summary goes into the job summary, never the full plan in a public log. The plan file is never uploaded.
+- [x] **`drift.yml`:** weekly and on demand. `tofu plan -detailed-exitcode`; on drift it opens or updates one issue, with the summary only.
+**Executed (2026-11-27, commits 397a759, 6743687, 8e8fde3, de446c0, 2f6ba97 and 292bdb9; built in an isolated worktree, opus security review plus one fix round, re-review clean):**
+- **`modules/gcp-ci-planner`:**
+  - a new pool `github-infra` and provider `lodestar-infra` (owner ID, repo ID, `job_workflow_ref` limited to plan.yml/drift.yml on `main` or `refs/pull/N/merge`, and an event allow-list);
+  - SA `tofu-planner`, with exactly two WIU subjects (`<immutable prefix>:pull_request` and `:ref:refs/heads/main`);
+  - roles: viewer, iam.securityReviewer and serviceUsageConsumer; objectViewer on the state bucket; EncrypterDecrypter on the state key (OpenTofu's gcp_kms calls Encrypt on every run, and nothing grants state writes); billing.viewer for the budget;
+  - a forbidden-roles test.
+- **`plan.yml` and `drift.yml`:**
+  - same-repo PRs only (never forks, never Dependabot); a "not configured yet" skip;
+  - identifying inputs are individual secrets (masked); region and zone are variables;
+  - no plan text in logs: only an address/action summary; error lines are redacted literally and never truncated;
+  - drift keeps one issue, filtered by the github-actions author, opened or closed by exit code.
+- **`docs/ci-identity-runbook.md`:** the owner's steps.
+- **Results:** `make check` green with no tfvars (bats 44).
+- **Expected owner plan:** 11 to add.
+
 - [ ] **Owner acceptance:** the owner applies the identity from a reviewed plan ("N to add, 0 to change, 0 to destroy"). A PR shows its plan summary, and a drift run reports "No changes".
 
 ### Task L2.1: Cloudflare zone baseline
