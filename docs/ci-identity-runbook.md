@@ -25,11 +25,13 @@ to the job summary.
   the state key (the state encryption calls Encrypt as well as Decrypt, so a decrypt-only role fails); and
   `roles/billing.viewer` on the billing account, **which includes cost data** (spend and budget). Custom
   billing roles need an organization, which this account does not have.
-- It can read the encrypted state, so anyone who can change `plan.yml` on a branch of this repository can read the
-  state through a pull request run. Give write access to this repository to people you trust with that.
+- It can read the encrypted state, and it is read-only, but anyone who can push a branch to this repository can
+  read whatever the planner can read: the plan runs the branch's code with the planner identity, so a changed
+  `plan.yml`, `scripts/ci-plan.sh`, a `.tf` file (for example a `data "external"`) or a provider change is enough.
+  Give write access to this repository only to people you trust with that.
 - Public logs: every identifying input is a repository secret, so GitHub masks it. The plan is never printed or
   uploaded; the job summary holds counts and resource addresses with their actions, never attribute values.
-  A failing run prints only the error lines.
+  A failing run prints only the `Error: ` lines, with every secret value replaced by `***` first (never cut).
 
 ## 1. This repository's IDs and subject prefix
 
@@ -88,7 +90,7 @@ tofu -chdir=envs/apps plan -out=ci-identity.tfplan
 
 ## 4. Acceptance
 
-The last line must read:
+The `Plan:` line must read (with `-out`, the notes on outputs and the saved plan follow it):
 
 ```text
 Plan: 11 to add, 0 to change, 0 to destroy.
@@ -144,7 +146,7 @@ printf '%s' "$(tofu -chdir=envs/apps output -raw CI_WIF_PROVIDER)" | gh secret s
 printf '%s' "$(tofu -chdir=envs/apps output -raw CI_SERVICE_ACCOUNT)" | gh secret set GCP_CI_SA --repo "${LODESTAR_REPO}"
 ```
 
-The other fourteen come from `envs/apps/terraform.tfvars`. The function reads one key and pipes it to `gh`:
+The other fourteen secrets come from `envs/apps/terraform.tfvars`. The function reads one key and pipes it to `gh`:
 
 ```bash
 set_secret() {
@@ -166,7 +168,7 @@ set_secret TF_STATE_BUCKET state_bucket
 set_secret TF_STATE_KMS_KEY_ID state_kms_key_id
 ```
 
-Check that all sixteen exist (names only):
+Check that all sixteen secrets exist (names only):
 
 ```bash
 gh secret list --repo "${LODESTAR_REPO}" | cut -f1 | sort
@@ -178,6 +180,19 @@ Expect these 16 names: `GCP_CI_SA`, `GCP_CI_WIF_PROVIDER`, `TF_BILLING_ACCOUNT`,
 `TF_STATE_BUCKET`, `TF_STATE_KMS_KEY_ID`, `TF_SUB_CLAIM_PREFIX`.
 
 If a secret is wrong, run `set_secret` for it again. Never set a secret with `echo`.
+
+The region and the zone are not identifying, so they are repository variables, not secrets. They must be
+the values your live cluster uses (the ones in `~/gke-setup.env`): the workflows pass them to `region` and
+`zone`, and a different value would plan a replacement of the cluster and everything in the region.
+
+```bash
+gh variable set TF_REGION --body "${REGION}" --repo "${LODESTAR_REPO}"
+gh variable set TF_ZONE --body "${ZONE}" --repo "${LODESTAR_REPO}"
+gh variable list --repo "${LODESTAR_REPO}"
+```
+
+Expect exactly these 2 variables, `TF_REGION` and `TF_ZONE`, with your region and zone. The workflows check all
+18 values (16 secrets and 2 variables) and skip the plan with the "not configured yet" notice if one is missing.
 
 ## 7. First run
 
@@ -197,12 +212,14 @@ summary in the job summary of the `Plan` workflow.
 
 - Remove the `ci_planner` module call, its three variables, the two outputs and the three tfvars lines. Plan: only
   destroys of the 11 CI-only resources above (the one allowed destroy case; anything else is a stop), then apply.
-- Delete the sixteen secrets:
+- Delete the 2 variables and the 16 secrets:
 
 ```bash
 for name in GCP_CI_SA GCP_CI_WIF_PROVIDER TF_BILLING_ACCOUNT TF_BUDGET_DISPLAY_NAME TF_BUDGET_ID TF_CI_GITHUB_REPO_ID TF_CI_GITHUB_REPOSITORY TF_CI_SUB_CLAIM_PREFIX TF_GITHUB_OWNER_ID TF_GITHUB_REPO_ID TF_GITHUB_REPOSITORY TF_PROJECT_ID TF_PROJECT_NUMBER TF_STATE_BUCKET TF_STATE_KMS_KEY_ID TF_SUB_CLAIM_PREFIX; do
   gh secret delete "${name}" --repo "${LODESTAR_REPO}"
 done
+gh variable delete TF_REGION --repo "${LODESTAR_REPO}"
+gh variable delete TF_ZONE --repo "${LODESTAR_REPO}"
 ```
 
 - A deleted Workload Identity pool or provider is soft-deleted for 30 days, and its id cannot be reused until

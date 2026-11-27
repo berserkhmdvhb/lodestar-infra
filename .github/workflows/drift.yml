@@ -47,11 +47,14 @@ jobs:
           TF_CI_SUB_CLAIM_PREFIX: ${{ secrets.TF_CI_SUB_CLAIM_PREFIX }}
           TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
           TF_STATE_KMS_KEY_ID: ${{ secrets.TF_STATE_KMS_KEY_ID }}
+          TF_REGION: ${{ vars.TF_REGION }}
+          TF_ZONE: ${{ vars.TF_ZONE }}
         run: |
           missing=0
           for name in GCP_CI_WIF_PROVIDER GCP_CI_SA TF_PROJECT_ID TF_PROJECT_NUMBER TF_BILLING_ACCOUNT TF_BUDGET_ID \
             TF_BUDGET_DISPLAY_NAME TF_GITHUB_REPOSITORY TF_GITHUB_OWNER_ID TF_GITHUB_REPO_ID TF_SUB_CLAIM_PREFIX \
-            TF_CI_GITHUB_REPOSITORY TF_CI_GITHUB_REPO_ID TF_CI_SUB_CLAIM_PREFIX TF_STATE_BUCKET TF_STATE_KMS_KEY_ID; do
+            TF_CI_GITHUB_REPOSITORY TF_CI_GITHUB_REPO_ID TF_CI_SUB_CLAIM_PREFIX TF_STATE_BUCKET TF_STATE_KMS_KEY_ID \
+            TF_REGION TF_ZONE; do
             if [[ -z "${!name}" ]]; then missing=1; fi
           done
           if [[ "${missing}" -eq 1 ]]; then
@@ -96,6 +99,10 @@ jobs:
           TF_VAR_ci_sub_claim_prefix: ${{ secrets.TF_CI_SUB_CLAIM_PREFIX }}
           TF_VAR_state_bucket: ${{ secrets.TF_STATE_BUCKET }}
           TF_VAR_state_kms_key_id: ${{ secrets.TF_STATE_KMS_KEY_ID }}
+          TF_VAR_region: ${{ vars.TF_REGION }}
+          TF_VAR_zone: ${{ vars.TF_ZONE }}
+          REDACT_WIF_PROVIDER: ${{ secrets.GCP_CI_WIF_PROVIDER }}
+          REDACT_SA: ${{ secrets.GCP_CI_SA }}
         run: |
           scripts/ci-plan.sh "${RUNNER_TEMP}/summary.md"
           {
@@ -113,7 +120,7 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TITLE: Drift detected in envs/apps
         run: |
-          number="$(gh issue list --state open --limit 100 --json number,title \
+          number="$(gh issue list --state open --author app/github-actions --limit 100 --json number,title \
             --jq "[.[] | select(.title == \"${TITLE}\")][0].number // empty")"
           if [[ "${EXITCODE}" == "0" ]]; then
             if [[ -n "${number}" ]]; then

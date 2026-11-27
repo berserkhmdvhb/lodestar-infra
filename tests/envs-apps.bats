@@ -2,6 +2,8 @@
 # Static checks on envs/apps (imports use variables only; targets exist) and the mock-provider
 # composition test. Offline: no credentials, no API calls.
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   IMPORTS="${IMPORTS_TF:-$ROOT/envs/apps/imports.tf}"
@@ -51,5 +53,5 @@ bad_ids() {
 }
 
 @test "no import block touches the CI planner identity (everything in it is new)" {
-  ! grep -n "ci_planner" "$IMPORTS"
+  run ! grep -n "ci_planner" "$IMPORTS"
 }
