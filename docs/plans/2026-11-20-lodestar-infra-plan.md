@@ -154,7 +154,22 @@
 
 ### Task L1.4: The GKE security baseline extras
 **Files:** VPC flow logs on the subnet, Data Access audit logging for the container API, and the `gke-security-posture` settings where the provider supports them.
-- [ ] **Tests and checkov:** checkov is clean, with documented skips only.
+- [x] **Tests and checkov:** checkov is clean, with documented skips only.
+
+**Executed (2026-11-27, commits 51a1450, 8850f53 and a42e52b; owner go on the proposed defaults):**
+- **RBAC:** the insecure bindings to `system:authenticated` and `system:unauthenticated` are refused.
+- **Secrets encryption:** application-layer encryption with a new `gcp-gke-secrets-key` module (ring `gke`, key `secrets` in the cluster's region, 90-day rotation, `prevent_destroy`). The GKE service agent gets EncrypterDecrypter, and the cluster only uses the key after that grant. `key_id` is built from the inputs, so the plan shows `ENCRYPTED`.
+- **Flow logs:** on the subnet, 10-minute aggregation and 0.1 sampling.
+- **Container API audit config:** `ADMIN_READ` and `DATA_WRITE`, with no `DATA_READ`.
+- **Security posture:** `BASIC`. Vulnerability scanning stays off, because GKE retired both tiers.
+- **Deferred:** node scopes and spot to on-demand, to one pool swap before go-live.
+- **Runbook:** `docs/hardening-runbook.md`. The expected plan is 4 to add, 2 to change, 0 to destroy. It covers:
+  - the control-plane restart of a zonal cluster;
+  - the RBAC leftover check;
+  - partial-failure and rollback paths.
+- **Results:** `make check` green (checkov 71 passed, 0 failed).
+- **Review:** the opus review found two Important runbook and plan-visibility issues, fixed in one round; the re-review is clean.
+- **Owner apply:** pending (a quiet window).
 
 ### Task L1.5: The `envs/apps` composition and the import (added 2026-11-27)
 **Files:**
