@@ -1,6 +1,7 @@
 # bootstrap
 
-Creates the GCS bucket that holds OpenTofu state for the other roots, and the Cloud KMS key that
+Creates the GCS bucket that holds OpenTofu state for the other roots, enables the Cloud KMS, Cloud Storage and
+Service Usage APIs (3 `google_project_service` resources; envs/apps needs Service Usage in the project), and the Cloud KMS key that
 encrypts that state (OpenTofu native state encryption, `aes_gcm` with the `gcp_kms` key provider).
 
 The bucket is versioned, uses uniform bucket-level access, enforces public access prevention and has

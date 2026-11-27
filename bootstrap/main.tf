@@ -1,5 +1,6 @@
+# Service Usage is required in the project by envs/apps, whose provider bills requests to the project (user_project_override).
 resource "google_project_service" "apis" {
-  for_each = toset(["cloudkms.googleapis.com", "storage.googleapis.com"])
+  for_each = toset(["cloudkms.googleapis.com", "storage.googleapis.com", "serviceusage.googleapis.com"])
 
   service            = each.key
   disable_on_destroy = false

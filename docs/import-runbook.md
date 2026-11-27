@@ -44,13 +44,17 @@ tofu -chdir=bootstrap init
 tofu -chdir=bootstrap plan -out=bootstrap.tfplan
 ```
 
-Expected: `Plan: 5 to add, 0 to change, 0 to destroy.` (2 APIs, key ring, key, bucket) and nothing else.
+Expected: `Plan: 6 to add, 0 to change, 0 to destroy.` (3 APIs: cloudkms, storage, serviceusage; key ring, key, bucket) and nothing else.
 Review it, then apply exactly that plan:
 
 ```bash
 tofu -chdir=bootstrap apply bootstrap.tfplan
 rm -f bootstrap/bootstrap.tfplan
 ```
+
+If you applied the bootstrap before `serviceusage.googleapis.com` was added, `tofu -chdir=bootstrap plan -out=bootstrap.tfplan`
+now shows exactly `1 to add` (`google_project_service.apis["serviceusage.googleapis.com"]`). Apply that saved plan,
+delete it, and wait 2-3 minutes for the API to propagate before step 2.
 
 If the apply fails with `SERVICE_DISABLED` right after the Cloud KMS API was enabled, wait a minute and
 run the apply again (plan again first if the saved plan was deleted). If it fails on the bucket name (a
@@ -192,6 +196,9 @@ EOF
 tofu -chdir=envs/apps init
 tofu -chdir=envs/apps plan -out=import.tfplan
 ```
+
+A 403 `SERVICE_DISABLED` for `serviceusage.googleapis.com` means the bootstrap apply above was skipped or has
+not propagated yet. A plan that ends in errors must never be applied: delete it with `rm -f envs/apps/import.tfplan`.
 
 The saved plan is `envs/apps/import.tfplan`. It is encrypted, and `*.tfplan` is git-ignored. Delete it when
 you are done.

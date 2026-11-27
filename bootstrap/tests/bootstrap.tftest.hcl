@@ -12,6 +12,15 @@ variables {
   state_bucket_name = "my-tofu-state-bucket"
 }
 
+run "apis_include_serviceusage" {
+  command = plan
+
+  assert {
+    condition     = contains(keys(google_project_service.apis), "serviceusage.googleapis.com")
+    error_message = "Service Usage must be enabled (envs/apps bills requests to the project)"
+  }
+}
+
 run "bucket_is_locked_down" {
   command = plan
 
