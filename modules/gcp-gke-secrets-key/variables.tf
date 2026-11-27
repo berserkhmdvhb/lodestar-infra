@@ -20,13 +20,15 @@ variable "region" {
 }
 
 variable "key_ring_name" {
-  type    = string
-  default = "gke"
+  type        = string
+  description = "Name of the KMS key ring that holds the secrets key."
+  default     = "gke"
 }
 
 variable "key_name" {
-  type    = string
-  default = "secrets"
+  type        = string
+  description = "Name of the KMS key used for application-layer secrets encryption."
+  default     = "secrets"
 }
 
 variable "rotation_period" {

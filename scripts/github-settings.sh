@@ -2,7 +2,8 @@
 # The GitHub repository settings as code: a `main` ruleset and the security settings.
 #
 # Usage: bash scripts/github-settings.sh [--dry-run | --apply]
-#   --dry-run  (default) print every call it would make, with the JSON payload; changes nothing.
+#   --dry-run  (default) print every call it would make, with the JSON payload; changes nothing (it does one read-only
+#             GET of the ruleset list, to say whether it would create or update).
 #   --apply    perform the calls. Run it once, as a repository admin, with your own `gh auth login`.
 # Needs: gh, jq, git. The repository is read from this checkout's `origin` remote, nothing is hard-coded.
 # GH_REPO (which gh would honour over the checkout) is never used: if it names another repository the

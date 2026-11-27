@@ -1917,6 +1917,156 @@ rm -f envs/apps/hardening.tfplan
 Rollback and the one allowed destroy (the audit config) are in the hardening runbook. Never destroy the KMS
 key or ring (`prevent_destroy`).
 
+### 12.4 The CI identity (L1.7), as run on 2026-11-27
+
+Run from: this repository's root, in the terminal of section 11. Goal: a read-only, keyless identity so that pull
+requests show a plan summary and a weekly run plans `main` against the live project. The reasons, the limits of
+the identity and the rollback are in [`ci-identity-runbook.md`](ci-identity-runbook.md); this is the command
+sequence as it was run.
+
+**Cloud Billing pre-check.** The identity reads the billing account, and the provider bills such calls to the
+project (`user_project_override`), so the Cloud Billing API must be on in the project. The `ci_planner` module
+enables it (`google_project_service.cloudbilling`); the first plan of the identity failed with `SERVICE_DISABLED`
+before that resource existed. Enabling an enabled API succeeds, so the pre-check only tells you what to expect.
+
+🔍
+
+```bash
+source ~/gke-setup.env
+gcloud services list --enabled --project "${PROJECT_ID}" --filter='config.name=cloudbilling.googleapis.com' --format='value(config.name)'
+```
+
+Expect: empty output (the plan enables it), or the name when it is already on. Both are fine.
+
+**The IDs and the immutable prefix.**
+
+🔍
+
+```bash
+unset GH_REPO
+export LODESTAR_REPO="${GH_OWNER}/lodestar-infra"
+export LODESTAR_REPO_ID="$(gh api "repos/${LODESTAR_REPO}" --jq .id)"
+export LODESTAR_SUB_PREFIX="$(gh api "repos/${LODESTAR_REPO}/actions/oidc/customization/sub" --jq '.sub_claim_prefix // empty')"
+printf '%s\n' "${LODESTAR_REPO_ID}" "${LODESTAR_SUB_PREFIX}"
+```
+
+Expect: a number, then `repo:<owner>@<number>/lodestar-infra@<number>`. If the second line is empty, build the
+immutable form from the IDs as the CI identity runbook (step 1) shows.
+
+**The tfvars lines, appended once.**
+
+✏️ Local files only.
+
+```bash
+grep -q '^ci_github_repository ' envs/apps/terraform.tfvars || printf 'ci_github_repository = "%s"\n' "${LODESTAR_REPO}" >> envs/apps/terraform.tfvars
+grep -q '^ci_github_repo_id ' envs/apps/terraform.tfvars || printf 'ci_github_repo_id    = "%s"\n' "${LODESTAR_REPO_ID}" >> envs/apps/terraform.tfvars
+grep -q '^ci_sub_claim_prefix ' envs/apps/terraform.tfvars || printf 'ci_sub_claim_prefix  = "%s"\n' "${LODESTAR_SUB_PREFIX}" >> envs/apps/terraform.tfvars
+tofu fmt envs/apps/terraform.tfvars
+```
+
+Expect: `tofu fmt` prints the file name only when it changed it. A block run twice without the `grep -q` guards
+appends every key twice, and the next plan stops with `Attribute redefined`. To repair such a file, keep the
+first occurrence of each key:
+
+✏️ Local files only.
+
+```bash
+awk -F' *= *' 'NF < 2 || !seen[$1]++' envs/apps/terraform.tfvars > envs/apps/terraform.tfvars.new
+mv envs/apps/terraform.tfvars.new envs/apps/terraform.tfvars
+tofu fmt envs/apps/terraform.tfvars
+```
+
+Expect: no output from the `awk` and `mv` lines; each key once (`grep -c '^ci_' envs/apps/terraform.tfvars` prints 3).
+
+**Plan, apply, "No changes".**
+
+✏️ (writes a saved plan; changes nothing in the cloud)
+
+```bash
+tofu -chdir=envs/apps init
+tofu -chdir=envs/apps plan -out=ci-identity.tfplan
+```
+
+Expect: `Plan: 12 to add, 0 to change, 0 to destroy.` The 12 adds are listed, with the two mechanical checks, in the CI
+identity runbook (step 4). Anything else is a hard stop.
+
+✏️ Changes the live project, its IAM and the billing account's IAM.
+
+```bash
+tofu -chdir=envs/apps apply ci-identity.tfplan
+rm -f envs/apps/ci-identity.tfplan
+tofu -chdir=envs/apps plan
+```
+
+Expect: `Apply complete! Resources: 12 added, 0 changed, 0 destroyed.` then `No changes.`
+
+**The 16 secrets and the 2 variables.**
+
+🔐 Each value goes from OpenTofu's output or `terraform.tfvars` straight into `gh`; nothing is printed.
+
+```bash
+printf '%s' "$(tofu -chdir=envs/apps output -raw CI_WIF_PROVIDER)" | gh secret set GCP_CI_WIF_PROVIDER --repo "${LODESTAR_REPO}"
+printf '%s' "$(tofu -chdir=envs/apps output -raw CI_SERVICE_ACCOUNT)" | gh secret set GCP_CI_SA --repo "${LODESTAR_REPO}"
+set_secret() {
+  sed -n "s/^${2} *= *\"\(.*\)\"\$/\1/p" envs/apps/terraform.tfvars | head -n 1 | tr -d '\n' | gh secret set "${1}" --repo "${LODESTAR_REPO}"
+}
+set_secret TF_PROJECT_ID project_id
+set_secret TF_PROJECT_NUMBER project_number
+set_secret TF_BILLING_ACCOUNT billing_account
+set_secret TF_BUDGET_ID budget_id
+set_secret TF_BUDGET_DISPLAY_NAME budget_display_name
+set_secret TF_GITHUB_REPOSITORY github_repository
+set_secret TF_GITHUB_OWNER_ID github_owner_id
+set_secret TF_GITHUB_REPO_ID github_repo_id
+set_secret TF_SUB_CLAIM_PREFIX sub_claim_prefix
+set_secret TF_CI_GITHUB_REPOSITORY ci_github_repository
+set_secret TF_CI_GITHUB_REPO_ID ci_github_repo_id
+set_secret TF_CI_SUB_CLAIM_PREFIX ci_sub_claim_prefix
+set_secret TF_STATE_BUCKET state_bucket
+set_secret TF_STATE_KMS_KEY_ID state_kms_key_id
+gh variable set TF_REGION --body "${REGION}" --repo "${LODESTAR_REPO}"
+gh variable set TF_ZONE --body "${ZONE}" --repo "${LODESTAR_REPO}"
+```
+
+🔍
+
+```bash
+gh secret list --repo "${LODESTAR_REPO}" | cut -f1 | sort | wc -l
+gh variable list --repo "${LODESTAR_REPO}" | cut -f1 | sort
+```
+
+Expect: `16`, then `TF_REGION` and `TF_ZONE`.
+
+**The first drift run, and the scan of its public log.** The repository is public, so its Actions log is public.
+Before trusting the setup, count the occurrences of each identifying value in the log. The values are read from
+`terraform.tfvars` and never printed; only the count per key name is.
+
+✏️ Starts a workflow run (read-only against the project).
+
+```bash
+gh workflow run drift.yml --repo "${LODESTAR_REPO}"
+sleep 10
+gh run watch "$(gh run list --workflow drift.yml --limit 1 --json databaseId --jq '.[0].databaseId' --repo "${LODESTAR_REPO}")" --repo "${LODESTAR_REPO}"
+```
+
+Expect: the run succeeds with `Plan: 0 to add, 0 to change, 0 to destroy, 0 to replace.` and `No changes.` in its job
+summary, and no drift issue is opened.
+
+🔍
+
+```bash
+LOG="$(mktemp)"
+gh run view "$(gh run list --workflow drift.yml --limit 1 --json databaseId --jq '.[0].databaseId' --repo "${LODESTAR_REPO}")" --log --repo "${LODESTAR_REPO}" > "${LOG}"
+for key in project_id project_number billing_account budget_id state_bucket state_kms_key_id github_owner_id github_repo_id ci_github_repo_id; do
+  value="$(sed -n "s/^${key} *= *\"\(.*\)\"\$/\1/p" envs/apps/terraform.tfvars | head -n 1)"
+  printf '%s: %s\n' "${key}" "$(grep -cF -- "${value}" "${LOG}")"
+done
+rm -f "${LOG}"
+```
+
+Expect: `0` for every key (GitHub shows each secret as `***`). Any other number is a leak: delete the run
+(`gh run delete`), then find the step that printed it before running again.
+
 ---
 
 ## 13. Git and publishing
@@ -2043,6 +2193,7 @@ private vulnerability reporting are on. A failure prints GitHub's error body and
 | | **cause 3:** the binding is right but has not propagated yet | wait up to about 7 minutes after the change and rerun (6.6) |
 | `gcloud` / `tofu` plan: `403 ... serviceusage.googleapis.com ... SERVICE_DISABLED` | the Service Usage API is not enabled in the project, and the root bills requests to the project, so the `google_project_service` reads fail | the bootstrap apply was skipped or has not propagated: wait 2 to 3 minutes; only for an old bootstrap, add the API through it (11.4) |
 | apply or plan: `SERVICE_DISABLED` for `cloudbilling.googleapis.com` on a billing-account IAM member | `user_project_override` bills requests to the project, so the Cloud Billing API must be enabled there | the `ci_planner` module enables it; if it was just enabled, wait 2 to 3 minutes and plan again |
+| plan: `Attribute redefined` for `ci_github_repository`, `ci_github_repo_id` or `ci_sub_claim_prefix` | the tfvars append of the CI identity runbook was run twice, so each key is in `terraform.tfvars` twice | keep the first occurrence of each key with the `awk` repair of 12.4, then `tofu fmt envs/apps/terraform.tfvars`; the append is now guarded and safe to repeat |
 | `tofu apply <file>`: no such file / "Failed to load" a plan | the saved plan was already deleted (`rm -f` after use), or was run from the wrong directory (the file is in `bootstrap/` or `envs/apps/`) | plan again into a new file; use `tofu -chdir=<root> apply <file>` |
 | `Excess arguments.`, `command not found: <word>`, or an odd error after a paste | prose (a sentence, a heading, a `->` explanation) was copied into the shell together with the commands | copy only the code block; if a prose line ran, check its side effects before going on |
 | `unrecognized arguments` / flag unknown in `gcloud container clusters create` | an old gcloud | update gcloud and rerun 5.1 |

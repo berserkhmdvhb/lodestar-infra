@@ -45,6 +45,7 @@ bad_ids() {
   rm -f "$D/envs/apps/imports.tf" "$D/envs/apps/backend.tf"
   mkdir "$D/envs/apps/tests"
   cp "$BATS_TEST_DIRNAME/envs-apps/apps.tftest.hcl" "$D/envs/apps/tests/"
+  cp "$BATS_TEST_DIRNAME/envs-apps/defaults.tf.txt" "$D/envs/apps/defaults.tf"
   run tofu -chdir="$D/envs/apps" init -backend=false -input=false
   [ "$status" -eq 0 ]
   run tofu -chdir="$D/envs/apps" test

@@ -71,6 +71,8 @@ jobs:
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: false
+      # Installs the full toolset (not just actionlint and zizmor) on purpose: the same `make tools` as the
+      # other jobs keeps this job on the same pinned, checksum-verified install path (parity with local runs).
       - run: make tools
       - run: make actions
 

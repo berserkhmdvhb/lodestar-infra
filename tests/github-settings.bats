@@ -4,6 +4,8 @@
 #   GH_RULESETS  JSON answered to GET .../rulesets (default: none exist)
 #   GH_FAIL      a substring of the call line that makes the stub fail with an error body
 
+bats_require_minimum_version 1.5.0
+
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   SCRIPT="$ROOT/scripts/github-settings.sh"
@@ -41,7 +43,7 @@ ruleset_json() { grep -m1 '"name":"main"' <<<"$output"; }
   [[ "$output" == *DRY-RUN* ]]
   [ "$(wc -l < "$GH_LOG")" -eq 1 ]
   grep -q 'rulesets' "$GH_LOG"
-  ! grep -q -- '-X' "$GH_LOG"
+  run ! grep -q -- '-X' "$GH_LOG"
 }
 
 @test "dry run says POST when no main ruleset exists and PUT with its id when one does" {
@@ -146,7 +148,7 @@ ruleset_json() { grep -m1 '"name":"main"' <<<"$output"; }
   run bash "$SCRIPT" --apply
   [ "$status" -eq 0 ]
   grep -q -- '-X POST .*repos/example-owner/example-repo/rulesets' "$GH_LOG"
-  ! grep -q -- '-X PUT .*rulesets/' "$GH_LOG"
+  run ! grep -q -- '-X PUT .*rulesets/' "$GH_LOG"
 }
 
 @test "--apply updates the existing ruleset in place (idempotent)" {
@@ -154,7 +156,7 @@ ruleset_json() { grep -m1 '"name":"main"' <<<"$output"; }
   run bash "$SCRIPT" --apply
   [ "$status" -eq 0 ]
   grep -q -- '-X PUT .*rulesets/77' "$GH_LOG"
-  ! grep -q -- '-X POST .*/rulesets ' "$GH_LOG"
+  run ! grep -q -- '-X POST .*/rulesets ' "$GH_LOG"
 }
 
 @test "a failing call prints the API error body and exits non-zero" {

@@ -42,7 +42,7 @@
 | Phase | Theme | Tasks | Status |
 |---|---|---|---|
 | 0 | Scaffold | L0.1 | **done** (2026-11-20) |
-| 1 | State and Google Cloud | L1.1 to L1.5 | in progress (owner go 2026-11-27, terminal). It imports the owner's by-hand GKE setup; see "Carried from the owner's by-hand setup" below |
+| 1 | State and Google Cloud | L1.1 to L1.7 | **done** (2026-11-27; see "Phase 1 closed" under L1.7). It imports the owner's by-hand GKE setup; see "Carried from the owner's by-hand setup" below |
 | 2 | Cloudflare | L2.1 to L2.3 | not started |
 | 3 | Environments, CI and docs | L3.1 to L3.3 | not started |
 
@@ -264,7 +264,22 @@ The repository is public and manages live infrastructure, so CI moves from the l
 - **Results:** `make check` green with no tfvars (bats 44).
 - **Expected owner plan:** 11 to add.
 
-- [ ] **Owner acceptance:** the owner applies the identity from a reviewed plan ("N to add, 0 to change, 0 to destroy"). A PR shows its plan summary, and a drift run reports "No changes".
+- [x] **Owner acceptance:** the owner applies the identity from a reviewed plan ("N to add, 0 to change, 0 to destroy"). A PR shows its plan summary, and a drift run reports "No changes".
+
+**Executed (2026-11-27):**
+- Applied 2026-11-27: 12 added, including the Cloud Billing API (`google_project_service.cloudbilling`, added by a fix PR after the first plan failed with `SERVICE_DISABLED`; the earlier estimate was 11).
+- 16 secrets and 2 variables set; the workflows no longer skip.
+- The first drift run succeeded with no drift (`No changes`).
+- The public log was scanned for every identifying value: 0 identifiers.
+- Follow-up: the tfvars append in the runbook is now idempotent (the owner's second run hit "Attribute redefined"); the operations runbook has the sequence in 12.4.
+
+**Phase 1 closed (2026-11-27).**
+- **Live:** the state bucket and key (bootstrap); the imported project APIs, network, node service account, cluster and secrets (envs/apps, "No changes"); the GKE hardening of L1.4; the budget; the application deploy identity; the read-only CI identity with PR plan summaries and the weekly drift run. The registry stays off.
+- **Deferred:**
+  - `roles/viewer` for the planner, to a possible custom role;
+  - an optional separate service account for PR plans (today one planner serves PRs and `main`);
+  - the `startsWith` condition on the secrets bindings: changing it would replace the bindings;
+  - the node scopes and spot to on-demand, at the one pool swap before go-live.
 
 ### Task L2.1: Cloudflare zone baseline
 **Files:** `modules/cloudflare-zone`. It covers:

@@ -2,8 +2,10 @@
 # scripts/ci-plan.sh against a stub tofu on PATH: nothing here reaches a cloud API.
 # The stub writes a recognisable value into its plan output and into the attribute values of the JSON,
 # so the tests can prove neither reaches stdout, stderr or the summary.
-#   TOFU_FAIL   init, plan, show or long: that step exits 1 and prints error lines
-#               (long: one 300-character Error line that contains the project id in the middle)
+#   TOFU_FAIL   init, plan, show, long, sa or nested: that step exits 1 and prints error lines
+#               (long: one 300-character Error line that contains the project id in the middle;
+#               sa: the Error line names REDACT_SA; nested: it names TF_VAR_nested, which contains the project id)
+#               show writes its plan text and Error line to STDERR, as the real tofu does
 #   TOFU_CODE   exit code of plan (default 2)
 #   TOFU_EMPTY  show answers a plan with no resource changes
 # Without -no-color the stub colours its error lines, so a missing flag shows up as an escape character.
@@ -28,6 +30,8 @@ if [[ "$args" == *" init "* ]]; then
 fi
 if [[ "$args" == *" plan "* ]]; then
   if [[ "${TOFU_FAIL:-}" == plan ]]; then err 'reading ***masked*** failed'; echo "  detail SENTINEL-DETAIL"; exit 1; fi
+  if [[ "${TOFU_FAIL:-}" == sa ]]; then err "denied for ${REDACT_SA}"; exit 1; fi
+  if [[ "${TOFU_FAIL:-}" == nested ]]; then err "see ${TF_VAR_nested}"; exit 1; fi
   if [[ "${TOFU_FAIL:-}" == long ]]; then
     pad="$(printf 'x%.0s' $(seq 1 300))"
     err "${pad} ${TF_VAR_project_id} ${pad}"
@@ -38,7 +42,7 @@ if [[ "$args" == *" plan "* ]]; then
   exit "${TOFU_CODE:-2}"
 fi
 if [[ "$args" == *" show "* ]]; then
-  if [[ "${TOFU_FAIL:-}" == show ]]; then echo "  + name = SENTINEL-SHOW"; err 'show failed'; exit 1; fi
+  if [[ "${TOFU_FAIL:-}" == show ]]; then echo "  + name = SENTINEL-SHOW" >&2; err 'show failed' >&2; exit 1; fi
   if [[ -n "${TOFU_EMPTY:-}" ]]; then echo '{"resource_changes":[]}'; exit 0; fi
   cat <<'JSON'
 {"resource_changes":[
@@ -123,6 +127,29 @@ STUB
   [ "$status" -eq 1 ]
   out="$output"
   run ! grep -q 'SENTINEL' <<<"$out"
+}
+
+@test "a failing show keeps its error line (stderr reaches the log) and still prints no plan text" {
+  TOFU_FAIL=show run "$SCRIPT" "$D/summary.md"
+  out="$output"
+  grep -qF 'Error: show failed' <<<"$out"
+}
+
+@test "REDACT_SA is replaced in an error line" {
+  TOFU_FAIL=sa run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 1 ]
+  out="$output"
+  grep -qxF 'Error: denied for ***' <<<"$out"
+  run ! grep -q 'SENTINEL' <<<"$out"
+}
+
+@test "a value that contains another value is redacted whole, longest first" {
+  export TF_VAR_nested="${TF_VAR_project_id}-suffix"
+  TOFU_FAIL=nested run "$SCRIPT" "$D/summary.md"
+  [ "$status" -eq 1 ]
+  out="$output"
+  grep -qxF 'Error: see ***' <<<"$out"
+  run ! grep -q 'suffix' <<<"$out"
 }
 
 @test "the plan file and the log are removed on exit" {

@@ -10,7 +10,9 @@ locals {
     "attribute.ref"                 = "assertion.ref"
   }
 
-  # The stored conditions carry two backslashes before each literal dot (a CEL string), as Google keeps them.
+  # Two backslashes before each literal dot (a CEL string), as Google stores it and as gcp-ci-planner writes it.
+  repository_regex = replace(var.github_repository, ".", "\\\\.")
+
   base_condition = "assertion.repository_owner_id=='${var.github_owner_id}' && assertion.repository_id=='${var.github_repo_id}'"
 
   cluster_role = var.create_custom_connect_role ? "projects/${var.project_id}/roles/${google_project_iam_custom_role.connect[0].role_id}" : var.deployer_cluster_role
@@ -26,6 +28,7 @@ resource "google_iam_workload_identity_pool" "github" {
   display_name              = var.pool_display_name
 }
 
+# The conditions carry two backslashes (four in HCL source) before each literal dot: a CEL string, as Google keeps it.
 resource "google_iam_workload_identity_pool_provider" "github" {
   # checkov:skip=CKV_GCP_125:the condition pins the immutable owner ID and repository ID plus the workflow file, which is stricter than the repository-name check
   project                            = var.project_id
@@ -33,7 +36,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_provider_id = var.provider_id
   display_name                       = var.provider_display_name
   attribute_mapping                  = local.attribute_mapping
-  attribute_condition                = "${local.base_condition} && assertion.job_workflow_ref.matches('^${var.github_repository}/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
+  attribute_condition                = "${local.base_condition} && assertion.job_workflow_ref.matches('^${local.repository_regex}/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
 
   oidc {
     issuer_uri = local.issuer_uri
@@ -76,6 +79,7 @@ resource "google_project_iam_member" "cluster" {
 
 # Optional: pull request previews (guide 12.5).
 resource "google_iam_workload_identity_pool_provider" "preview" {
+  # checkov:skip=CKV_GCP_125:the condition pins the immutable owner ID and repository ID plus the workflow file, which is stricter than the repository-name check
   count = var.enable_previews ? 1 : 0
 
   project                            = var.project_id
@@ -83,7 +87,7 @@ resource "google_iam_workload_identity_pool_provider" "preview" {
   workload_identity_pool_provider_id = "github-oidc-preview"
   display_name                       = "GitHub OIDC (previews)"
   attribute_mapping                  = local.attribute_mapping
-  attribute_condition                = "${local.base_condition} && assertion.environment=='preview' && assertion.job_workflow_ref.matches('^${var.github_repository}/\\\\.github/workflows/preview\\\\.yml@refs/(pull/[0-9]+/merge|heads/main)$')"
+  attribute_condition                = "${local.base_condition} && assertion.environment=='preview' && assertion.job_workflow_ref.matches('^${local.repository_regex}/\\\\.github/workflows/preview\\\\.yml@refs/(pull/[0-9]+/merge|heads/main)$')"
 
   oidc {
     issuer_uri = local.issuer_uri
@@ -124,7 +128,7 @@ resource "google_iam_workload_identity_pool_provider" "drift" {
   workload_identity_pool_provider_id = "github-oidc-drift-${each.key}"
   display_name                       = "GitHub OIDC (drift ${each.key})"
   attribute_mapping                  = local.attribute_mapping
-  attribute_condition                = "${local.base_condition} && assertion.environment=='drift-${each.key}' && assertion.job_workflow_ref.matches('^${var.github_repository}/\\\\.github/workflows/drift\\\\.yml@refs/heads/main$')"
+  attribute_condition                = "${local.base_condition} && assertion.environment=='drift-${each.key}' && assertion.job_workflow_ref.matches('^${local.repository_regex}/\\\\.github/workflows/drift\\\\.yml@refs/heads/main$')"
 
   oidc {
     issuer_uri = local.issuer_uri

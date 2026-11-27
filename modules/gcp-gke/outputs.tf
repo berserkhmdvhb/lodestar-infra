@@ -1,9 +1,11 @@
 output "cluster_name" {
-  value = google_container_cluster.this.name
+  description = "Name of the GKE cluster."
+  value       = google_container_cluster.this.name
 }
 
 output "location" {
-  value = google_container_cluster.this.location
+  description = "Location of the GKE cluster."
+  value       = google_container_cluster.this.location
 }
 
 output "dns_endpoint" {

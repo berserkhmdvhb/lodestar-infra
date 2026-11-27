@@ -130,3 +130,21 @@ run "secrets_key_is_wired_to_the_cluster" {
     error_message = "the cluster must get the secrets key id"
   }
 }
+
+# The import list in imports.tf is derived from these locals; they must equal the module defaults.
+run "import_lists_equal_the_module_defaults" {
+  command = plan
+
+  assert {
+    condition     = sort(local.services) == module.defaults_project.services
+    error_message = "local.services must equal the gcp-project default services"
+  }
+  assert {
+    condition     = module.secrets.secret_ids == module.defaults_secrets.secret_ids
+    error_message = "local.secret_keys must equal the gcp-secrets default secret_keys"
+  }
+  assert {
+    condition     = local.service_name == "your-service-name"
+    error_message = "local.service_name must stay the gcp-secrets default"
+  }
+}

@@ -156,6 +156,10 @@ run "cmek_wires_key_and_service_agent" {
     condition     = one(google_kms_crypto_key_iam_member.gcs_agent).role == "roles/cloudkms.cryptoKeyEncrypterDecrypter"
     error_message = "agent role is encrypterDecrypter"
   }
+  assert {
+    condition     = one(google_storage_bucket.state.encryption).default_kms_key_name == google_kms_crypto_key.state.id
+    error_message = "default_kms_key_name must be the state key"
+  }
 }
 
 run "bad_bucket_name_rejected" {
@@ -186,4 +190,64 @@ run "all_authenticated_users_admin_rejected" {
   }
 
   expect_failures = [var.state_admins]
+}
+
+run "rotation_without_suffix_rejected" {
+  command = plan
+
+  variables {
+    kms_rotation_period = "7776000"
+  }
+
+  expect_failures = [var.kms_rotation_period]
+}
+
+run "rotation_below_one_day_rejected" {
+  command = plan
+
+  variables {
+    kms_rotation_period = "3600s"
+  }
+
+  expect_failures = [var.kms_rotation_period]
+}
+
+run "rotation_not_numeric_rejected" {
+  command = plan
+
+  variables {
+    kms_rotation_period = "abcs"
+  }
+
+  expect_failures = [var.kms_rotation_period]
+}
+
+run "zero_versions_kept_rejected" {
+  command = plan
+
+  variables {
+    noncurrent_versions_kept = 0
+  }
+
+  expect_failures = [var.noncurrent_versions_kept]
+}
+
+run "negative_days_rejected" {
+  command = plan
+
+  variables {
+    noncurrent_days = -1
+  }
+
+  expect_failures = [var.noncurrent_days]
+}
+
+run "double_dot_bucket_name_rejected" {
+  command = plan
+
+  variables {
+    state_bucket_name = "my..state-bucket"
+  }
+
+  expect_failures = [var.state_bucket_name]
 }

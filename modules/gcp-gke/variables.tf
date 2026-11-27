@@ -24,8 +24,9 @@ variable "node_service_account" {
 }
 
 variable "cluster_name" {
-  type    = string
-  default = "apps"
+  type        = string
+  description = "Name of the GKE cluster."
+  default     = "apps"
 }
 
 variable "location" {
@@ -35,8 +36,9 @@ variable "location" {
 }
 
 variable "release_channel" {
-  type    = string
-  default = "STABLE"
+  type        = string
+  description = "GKE release channel (RAPID, REGULAR, STABLE or EXTENDED)."
+  default     = "STABLE"
 
   validation {
     condition     = contains(["RAPID", "REGULAR", "STABLE"], var.release_channel)
@@ -45,13 +47,15 @@ variable "release_channel" {
 }
 
 variable "pods_range_name" {
-  type    = string
-  default = "pods"
+  type        = string
+  description = "Name of the subnet secondary range used for pods."
+  default     = "pods"
 }
 
 variable "services_range_name" {
-  type    = string
-  default = "services"
+  type        = string
+  description = "Name of the subnet secondary range used for services."
+  default     = "services"
 }
 
 variable "enable_public_endpoint" {
@@ -72,8 +76,9 @@ variable "binary_authorization_mode" {
 }
 
 variable "deletion_protection" {
-  type    = bool
-  default = true
+  type        = bool
+  description = "Whether the cluster refuses deletion."
+  default     = true
 }
 
 variable "labels" {
@@ -101,33 +106,39 @@ variable "maintenance_recurrence" {
 }
 
 variable "node_pool_name" {
-  type    = string
-  default = "default-pool"
+  type        = string
+  description = "Name of the node pool."
+  default     = "default-pool"
 }
 
 variable "machine_type" {
-  type    = string
-  default = "e2-standard-2"
+  type        = string
+  description = "Compute machine type of the nodes."
+  default     = "e2-standard-2"
 }
 
 variable "disk_type" {
-  type    = string
-  default = "pd-balanced"
+  type        = string
+  description = "Boot disk type of the nodes."
+  default     = "pd-balanced"
 }
 
 variable "disk_size_gb" {
-  type    = number
-  default = 50
+  type        = number
+  description = "Boot disk size of each node, in GB."
+  default     = 50
 }
 
 variable "min_node_count" {
-  type    = number
-  default = 1
+  type        = number
+  description = "Minimum node count of the node pool autoscaler."
+  default     = 1
 }
 
 variable "max_node_count" {
-  type    = number
-  default = 3
+  type        = number
+  description = "Maximum node count of the node pool autoscaler."
+  default     = 3
 }
 
 variable "spot" {

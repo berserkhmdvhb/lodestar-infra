@@ -265,3 +265,59 @@ run "ids_must_be_digits" {
 
   expect_failures = [var.project_number, var.github_owner_id]
 }
+
+run "repository_must_look_like_owner_repo" {
+  command = plan
+
+  variables {
+    github_repository = "no-slash"
+  }
+
+  expect_failures = [var.github_repository]
+}
+
+run "repository_with_extra_slash_rejected" {
+  command = plan
+
+  variables {
+    github_repository = "a/b/c"
+  }
+
+  expect_failures = [var.github_repository]
+}
+
+run "underscore_repository_renders_unescaped" {
+  command = plan
+
+  variables {
+    github_repository = "example_owner/name_with_underscores"
+    enable_previews   = true
+    enable_drift      = true
+  }
+
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.github.attribute_condition == "assertion.repository_owner_id=='123' && assertion.repository_id=='456' && assertion.job_workflow_ref.matches('^example_owner/name_with_underscores/\\\\.github/workflows/(deploy|deploy-ops)\\\\.yml@refs/(heads/main|tags/v.*)$')"
+    error_message = "main condition must be byte-identical for a name without regex metacharacters"
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.preview[0].attribute_condition == "assertion.repository_owner_id=='123' && assertion.repository_id=='456' && assertion.environment=='preview' && assertion.job_workflow_ref.matches('^example_owner/name_with_underscores/\\\\.github/workflows/preview\\\\.yml@refs/(pull/[0-9]+/merge|heads/main)$')"
+    error_message = "preview condition must be byte-identical for a name without regex metacharacters"
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.drift["dev"].attribute_condition == "assertion.repository_owner_id=='123' && assertion.repository_id=='456' && assertion.environment=='drift-dev' && assertion.job_workflow_ref.matches('^example_owner/name_with_underscores/\\\\.github/workflows/drift\\\\.yml@refs/heads/main$')"
+    error_message = "drift condition must be byte-identical for a name without regex metacharacters"
+  }
+}
+
+run "dot_in_repository_is_regex_escaped" {
+  command = plan
+
+  variables {
+    github_repository = "example-owner/example.repo"
+  }
+
+  assert {
+    condition     = strcontains(google_iam_workload_identity_pool_provider.github.attribute_condition, "matches('^example-owner/example\\\\.repo/")
+    error_message = "a dot in the repository name must be escaped like in gcp-ci-planner"
+  }
+}

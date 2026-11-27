@@ -10,13 +10,15 @@ variable "region" {
 }
 
 variable "network_name" {
-  type    = string
-  default = "apps-vpc"
+  type        = string
+  description = "Name of the VPC network."
+  default     = "apps-vpc"
 }
 
 variable "subnet_name" {
-  type    = string
-  default = "apps-subnet"
+  type        = string
+  description = "Name of the primary subnet."
+  default     = "apps-subnet"
 }
 
 variable "subnet_cidr" {
@@ -38,13 +40,15 @@ variable "services_cidr" {
 }
 
 variable "router_name" {
-  type    = string
-  default = "apps-router"
+  type        = string
+  description = "Name of the Cloud Router used by Cloud NAT."
+  default     = "apps-router"
 }
 
 variable "nat_name" {
-  type    = string
-  default = "apps-nat"
+  type        = string
+  description = "Name of the Cloud NAT gateway."
+  default     = "apps-nat"
 }
 
 variable "enable_proxy_only_subnet" {
@@ -54,13 +58,15 @@ variable "enable_proxy_only_subnet" {
 }
 
 variable "proxy_only_subnet_name" {
-  type    = string
-  default = "apps-proxy-only"
+  type        = string
+  description = "Name of the proxy-only subnet for regional load balancers."
+  default     = "apps-proxy-only"
 }
 
 variable "proxy_only_cidr" {
-  type    = string
-  default = "10.129.0.0/23"
+  type        = string
+  description = "CIDR range of the proxy-only subnet."
+  default     = "10.129.0.0/23"
 }
 
 variable "enable_flow_logs" {
@@ -70,8 +76,9 @@ variable "enable_flow_logs" {
 }
 
 variable "flow_log_aggregation_interval" {
-  type    = string
-  default = "INTERVAL_10_MIN"
+  type        = string
+  description = "Aggregation interval of the subnet flow logs."
+  default     = "INTERVAL_10_MIN"
 }
 
 variable "flow_log_sampling" {
@@ -86,6 +93,7 @@ variable "flow_log_sampling" {
 }
 
 variable "flow_log_metadata" {
-  type    = string
-  default = "INCLUDE_ALL_METADATA"
+  type        = string
+  description = "Which metadata the subnet flow logs include."
+  default     = "INCLUDE_ALL_METADATA"
 }
