@@ -100,6 +100,17 @@ module "secrets" {
   secret_keys    = local.secret_keys
 }
 
+module "platform_secrets" {
+  source = "../../modules/gcp-platform-secret"
+
+  project_id     = var.project_id
+  project_number = var.project_number
+  region         = var.region
+  secrets = {
+    "cloudflared-tunnel-token" = { namespace = "cloudflared" }
+  }
+}
+
 module "budget" {
   source = "../../modules/gcp-budget"
 

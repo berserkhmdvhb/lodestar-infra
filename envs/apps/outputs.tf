@@ -36,6 +36,11 @@ output "CI_SERVICE_ACCOUNT" {
   value       = module.ci_planner.ci_service_account
 }
 
+output "CLOUDFLARED_TUNNEL_TOKEN_SECRET_ID" {
+  description = "Secret Manager id of the Cloudflare tunnel token (the value is added by hand)."
+  value       = module.platform_secrets.secret_ids["cloudflared-tunnel-token"]
+}
+
 output "dns_endpoint" {
   description = "DNS-based control-plane endpoint (host name)."
   value       = module.gke.dns_endpoint

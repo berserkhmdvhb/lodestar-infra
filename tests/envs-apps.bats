@@ -56,3 +56,7 @@ bad_ids() {
 @test "no import block touches the CI planner identity (everything in it is new)" {
   run ! grep -n "ci_planner" "$IMPORTS"
 }
+
+@test "no import block touches the platform secrets (the tunnel token container and grant are new)" {
+  run ! grep -n "platform_secrets" "$IMPORTS"
+}
