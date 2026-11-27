@@ -283,7 +283,7 @@ The repository is public and manages live infrastructure, so CI moves from the l
   - the node scopes and spot to on-demand, at the one pool swap before go-live.
 
 ### Task L2.0: The tunnel token's secret container and access grant (added 2026-11-27)
-**Files:** `modules/gcp-platform-secret`, the `envs/apps` wiring, tests, and `docs/operations-runbook.md`.
+**Files:** `modules/gcp-platform-secret`, the `envs/apps` wiring, tests, and `docs/operations/`.
 - [x] **The module:** a map of secret IDs to namespaces. For each secret:
   - one Secret Manager container, with user-managed replication in the region;
   - one conditional `secretAccessor` member for the namespace's `external-secrets` principal, titled `eso-<namespace>`, with the expression `resource.name.startsWith("projects/<number>/secrets/<id>/")`;
@@ -328,6 +328,20 @@ The registrar stays manual.
 - **The mapping:** each guide step mapped to its resource.
 
 Also cover drift detection, which runs as `tofu plan` on a schedule once credentials exist; that's for later.
+
+### Task L3.4: Split the operations runbook into `docs/operations/` (added 2026-11-27, owner "yes")
+**Files:** `docs/operations/{README,workstation,gcp-foundation,gke,github-identity,secrets,github-settings,opentofu,troubleshooting,glossary}.md`, the `docs/operations-runbook.md` stub, inbound references, `tests/operations-docs.bats` and its fixture.
+- [x] **The split preserves the content, proven by tests against a byte-identical copy of the original:**
+  - every code block (116), Expect line (70), table row, heading and prose line survives;
+  - the only exceptions are an explicit, documented list (the old contents list, intro, production pointer and two link rewrites).
+- [x] **Six pre-existing zsh traps fixed:** 3 comments in code blocks moved to prose, and 3 `echo` lines became `printf`. A guard stops new ones.
+- [x] **Section numbers and anchors are kept,** so references like "ops 5.3" stay valid.
+
+**Executed (2026-11-27):**
+- Built in an isolated worktree.
+- The review approved it; the controller verified the fixture with `cmp` and ran the tests (21/21).
+- Two fix rounds: the prose-preservation test, the zsh traps, the stub table, and two prose lines aligned with `printf`.
+- `cloudflare.md` is written from the owner's real Cloudflare run.
 
 ## Phase 4: A separate production environment (added 2026-11-27, owner-approved design)
 
