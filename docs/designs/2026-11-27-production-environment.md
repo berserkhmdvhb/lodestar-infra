@@ -174,8 +174,9 @@ impersonate it from `apps` could read production state. The cost is two more rep
 Production state lives **in the production project**, with its own bucket and its own KMS key.
 
 To avoid duplicating code, the state resources of `bootstrap/` move into a new `modules/gcp-state-backend`:
-- **Inputs:** `state_admins` (objectAdmin) and a new `state_readers` (objectViewer plus EncrypterDecrypter: `gcp_kms`
-  encrypts on every run, so decrypt-only is not enough).
+- **Inputs:** `state_admins` (objectAdmin plus the key role), as today. There is no separate readers input: the CI
+  planner module already grants itself objectViewer on the bucket and EncrypterDecrypter on the key (`gcp_kms`
+  encrypts on every run, so decrypt-only is not enough), as it does for `apps`.
 - **Keeping the live addresses:** `bootstrap/` calls the module, with `moved` blocks. State encryption doesn't affect
   `moved` blocks.
 - **Proving it:** CI never plans `bootstrap/`, whose backend is the local, git-ignored `override.tf`. So the proof is the
@@ -264,7 +265,7 @@ Nothing is deployed to production yet, so there is no traffic to move.
 - The network ranges and names above.
 - The default OAuth scopes are kept.
 - Each root gets its own explicit CI jobs.
-- `state_readers` is a new input on the state module.
+- The state module has no readers input: the CI planner grants itself read access, as for `apps`.
 - Which root owns the Cloudflare side is deferred to the Cloudflare design.
 - **The deferred `apps` pool swap is dropped.** `apps` is now non-production, so it stays on spot nodes. Narrowing its
   OAuth scopes would replace its node pool, so it becomes a separate, deliberate change later.
