@@ -25,6 +25,16 @@ output "GCP_DEPLOYER_SA" {
   value       = { for k, m in module.github_wif : k => m.deployer_emails["production"] }
 }
 
+output "DRIFT_WIF_PROVIDER" {
+  description = "Map of service key to its drift-production Workload Identity provider full name (the template's DRIFT_WIF_PROVIDER)."
+  value       = { for k, m in module.github_wif : k => m.drift_workload_identity_providers["production"] }
+}
+
+output "DRIFT_SA" {
+  description = "Map of service key to its read-only drift service account e-mail (the template's DRIFT_SA)."
+  value       = { for k, m in module.github_wif : k => m.drift_service_accounts["production"] }
+}
+
 # CI identity of this repository for envs/prod: the secrets TF_PROD_CI_WIF_PROVIDER and TF_PROD_CI_SA.
 output "CI_WIF_PROVIDER" {
   description = "Workload Identity provider full name for the production plan and drift jobs."

@@ -128,7 +128,9 @@ module "github_wif" {
   deployer_cluster_role      = module.connect_role.role_name
   create_custom_connect_role = false
   enable_previews            = false
-  enable_drift               = false
+  enable_drift               = true
+  drift_environments         = ["production"]
+  drift_account_ids          = { production = "gh-drift-${each.key}" } # 12 to 29 characters for a 3 to 20 character key
 
   depends_on = [module.project]
 }

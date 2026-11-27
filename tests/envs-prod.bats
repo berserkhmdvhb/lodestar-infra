@@ -65,7 +65,7 @@ has() { block "$1" | grep -qF -- "$2" || { echo "module $1 lacks: $2"; return 1;
 }
 
 @test "deploy identity: one call per service, production only, one custom role created once outside the services" {
-  for s in 'for_each = var.services' 'environments = ["production"]' 'allowed_environment = "production"' 'enable_previews = false' 'enable_drift = false' \
+  for s in 'for_each = var.services' 'environments = ["production"]' 'allowed_environment = "production"' 'enable_previews = false' 'enable_drift = true' 'drift_environments = ["production"]' 'drift_account_ids = { production = "gh-drift-${each.key}" }' \
     'pool_id = "gh-${each.key}"' 'deployer_account_ids = { production = each.value.deployer_account_id }' \
     'github_repository = each.value.github_repository' 'github_owner_id = each.value.github_owner_id' \
     'github_repo_id = each.value.github_repo_id' 'sub_claim_prefix = each.value.sub_claim_prefix' \

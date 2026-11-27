@@ -73,7 +73,8 @@ module "github_wif" {
   environments               = local.environments
   create_custom_connect_role = false
   enable_previews            = false
-  enable_drift               = false
+  enable_drift               = true
+  drift_environments         = ["dev", "qa"] # production moves to envs/prod
 }
 
 module "ci_planner" {
