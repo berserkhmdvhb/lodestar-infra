@@ -16,24 +16,23 @@ secrets) is the single list of names.
 
 ✏️ (writes a file of identifiers, not secrets, in the private folder; mode `600`). `RELEASE_APP_ID` is a placeholder until 9.3.
 
+The file has three groups: the repository variables (`GCP_PROJECT_ID` to `RELEASE_APP_ID`), the environment variables (the same provider, a different deployer each: the `ENV_*` lines), and a script input that is never sent as a variable (`REVIEWER_USER_ID`, the production reviewer, you).
+
 ```bash
 source ~/gke-setup.env
 WIF="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/github-oidc"
 cat > ~/platform-config/github-vars.env <<EOF
-# Repository variables
 GCP_PROJECT_ID=${PROJECT_ID}
 GKE_CLUSTER=${CLUSTER}
 GKE_LOCATION=${ZONE}
 SERVICE_NAME=${SERVICE_NAME}
 RELEASE_APP_ID=<APP_ID>
-# Environment variables (the same provider, a different deployer each)
 ENV_dev_GCP_WIF_PROVIDER=${WIF}
 ENV_qa_GCP_WIF_PROVIDER=${WIF}
 ENV_production_GCP_WIF_PROVIDER=${WIF}
 ENV_dev_GCP_DEPLOYER_SA=gh-deployer-dev@${PROJECT_ID}.iam.gserviceaccount.com
 ENV_qa_GCP_DEPLOYER_SA=gh-deployer-qa@${PROJECT_ID}.iam.gserviceaccount.com
 ENV_production_GCP_DEPLOYER_SA=gh-deployer-production@${PROJECT_ID}.iam.gserviceaccount.com
-# Script input, never sent as a variable: the production reviewer (you)
 REVIEWER_USER_ID=${GH_OWNER_ID}
 EOF
 chmod 600 ~/platform-config/github-vars.env
@@ -53,7 +52,7 @@ leave it out for an adopter's copy.
 ```bash
 cd ~/path/to/the/template/repository
 scripts/github-settings.sh --repo "${GH_REPO}" --vars-file ~/platform-config/github-vars.env \
-  --template --diff > ~/platform-config/settings-dryrun.txt 2>&1; echo "exit=$?"
+  --template --diff > ~/platform-config/settings-dryrun.txt 2>&1; printf 'exit=%s\n' "$?"
 ```
 
 Expect: `exit=0`, and `~/platform-config/settings-dryrun.txt` is about 80 lines. Read it. Check the line
@@ -81,7 +80,7 @@ It saves what it overwrites to a timestamped folder first and prints the path.
 
 ```bash
 scripts/github-settings.sh --repo "${GH_REPO}" --vars-file ~/platform-config/github-vars.env \
-  --template --apply; echo "exit=$?"
+  --template --apply; printf 'exit=%s\n' "$?"
 ```
 
 Expect: `exit=0` (or `3` with a printed list of skips on a private repository). After it, `main` takes pull

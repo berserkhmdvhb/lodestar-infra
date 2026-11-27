@@ -159,7 +159,7 @@ spec: { podSelector: {}, policyTypes: [Ingress] }
 EOF
 kubectl -n np-test run probe-b --rm -i --restart=Never --image=busybox:1.37 -- \
   wget -qO- -T 5 http://web:8080
-echo "exit=$?"
+printf 'exit=%s\n' "$?"
 ```
 
 Expect: the `wget` times out and `exit=` is not `0`.

@@ -53,13 +53,52 @@ headings() { outside "$@" | grep -E '^#{1,6} ' | sed -E 's/^#+ +//; s/^[0-9]+(\.
   grep -qF '](operations/README.md)' "$ROOT/docs/operations-runbook.md"
 }
 
-@test "every fenced block of the old file is in the new set, verbatim, once" {
-  blocks "$OLD" | LC_ALL=C sort > "$BATS_TEST_TMPDIR/old"
+# The only intended edits to code blocks (zsh does not treat # as a comment by default, and echo is against the rules):
+# the three comment lines of the 9.1 vars-file block moved to prose before it, and `echo "exit=$?"` became printf.
+# Applied to the old blocks before comparing, so any OTHER block change still fails.
+oldblocks() {
+  blocks "$OLD" | sed \
+    -e 's/# Repository variables\f//' \
+    -e 's/# Environment variables (the same provider, a different deployer each)\f//' \
+    -e 's/# Script input, never sent as a variable: the production reviewer (you)\f//' \
+    -e 's/echo "exit=\$?"/printf '"'"'exit=%s\\n'"'"' "$?"/g'
+}
+
+@test "every fenced block of the old file (with the 6 documented edits) is in the new set, verbatim, once" {
+  oldblocks | LC_ALL=C sort > "$BATS_TEST_TMPDIR/old"
   blocks "${NEW[@]}" | LC_ALL=C sort > "$BATS_TEST_TMPDIR/new"
   [ "$(wc -l < "$BATS_TEST_TMPDIR/old")" -gt 100 ]
   run diff "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new"
   echo "$output" | tr '\f' '~' | head -20
   [ "$status" -eq 0 ]
+}
+
+@test "every prose line of the old file is in the new set, except the listed intended edits" {
+  # Allowlist of old lines that were intentionally rewritten: the intro and the hardening and CI-identity pointers
+  # (relative links gained ../), the production pointer (its "below" is gone and its link gained ../), and the
+  # numbered Contents list (now the section map table).
+  allow=(
+    '[`import-runbook.md`](import-runbook.md), [`hardening-runbook.md`](hardening-runbook.md) and'
+    '[`production-runbook.md`](production-runbook.md) (the separate production project and cluster). It collects the'
+    'The production project and its regional cluster are built by [`production-runbook.md`](production-runbook.md),'
+    "which reuses the commands of sections 5, 7, 8 and 12 below with production's names."
+    'API. The detail and the acceptance rules are in [`hardening-runbook.md`](hardening-runbook.md); this is the'
+    'the identity and the rollback are in [`ci-identity-runbook.md`](ci-identity-runbook.md); this is the command'
+  )
+  outside "$OLD" | grep -v '^[[:space:]]*$' > "$BATS_TEST_TMPDIR/oldp"
+  outside "${NEW[@]}" > "$BATS_TEST_TMPDIR/newp"
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/oldp")" -gt 800 ]
+  bad=0
+  while IFS= read -r line; do
+    grep -qxF -- "$line" "$BATS_TEST_TMPDIR/newp" && continue
+    [[ "$line" =~ ^[0-9]+\.\ \[.*\]\(#[a-z0-9-]+\)$ ]] && continue
+    skip=0
+    for a in "${allow[@]}"; do [ "$line" = "$a" ] && skip=1; done
+    [ "$skip" = 1 ] && continue
+    echo "dropped or edited: $line"
+    bad=1
+  done < "$BATS_TEST_TMPDIR/oldp"
+  [ "$bad" -eq 0 ]
 }
 
 @test "every Expect line of the old file is in the new set" {
@@ -118,12 +157,10 @@ headings() { outside "$@" | grep -E '^#{1,6} ' | sed -E 's/^#+ +//; s/^[0-9]+(\.
   for f in "$BATS_TEST_TMPDIR"/b/*.sh; do zsh -n "$f" || { echo "zsh -n failed: $f"; return 1; }; done
 }
 
-@test "the split adds no comment and no echo to the code blocks (the old file's own are kept, not fixed)" {
-  oc="$(blocks "$OLD" | tr '\f' '\n' | grep -cE '^[[:space:]]*#' || true)"
-  nc="$(blocks "${NEW[@]}" | tr '\f' '\n' | grep -cE '^[[:space:]]*#' || true)"
-  oe="$(blocks "$OLD" | tr '\f' '\n' | grep -cE '(^|[|;&(]|[[:space:]])echo[[:space:]]' || true)"
-  ne="$(blocks "${NEW[@]}" | tr '\f' '\n' | grep -cE '(^|[|;&(]|[[:space:]])echo[[:space:]]' || true)"
-  echo "comments old=$oc new=$nc; echo old=$oe new=$ne"
-  [ "$oc" -eq "$nc" ]
-  [ "$oe" -eq "$ne" ]
+@test "no code block has a comment line (a #! line aside) or an echo" {
+  blocks "${NEW[@]}" | tr '\f' '\n' > "$BATS_TEST_TMPDIR/all"
+  [ "$(wc -l < "$BATS_TEST_TMPDIR/all")" -gt 500 ]
+  run grep -nE '^[[:space:]]*#([^!]|$)|(^|[|;&(]|[[:space:]])echo[[:space:]]' "$BATS_TEST_TMPDIR/all"
+  echo "$output"
+  [ "$status" -eq 1 ]
 }
