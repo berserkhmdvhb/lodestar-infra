@@ -22,7 +22,7 @@ locals {
 
   pool_name  = "projects/${var.project_number}/locations/global/workloadIdentityPools/${var.pool_id}"
   envs       = toset(var.environments)
-  drift_envs = var.enable_drift ? local.envs : toset([])
+  drift_envs = var.enable_drift ? toset(coalesce(var.drift_environments, var.environments)) : toset([])
 }
 
 resource "google_iam_workload_identity_pool" "github" {
@@ -145,7 +145,7 @@ resource "google_service_account" "drift" {
   for_each = local.drift_envs
 
   project      = var.project_id
-  account_id   = "gh-drift-${each.key}"
+  account_id   = lookup(var.drift_account_ids, each.key, "gh-drift-${each.key}")
   display_name = "GitHub Actions drift reader (${each.key})"
 }
 
@@ -155,6 +155,9 @@ resource "google_service_account_iam_member" "drift" {
   service_account_id = google_service_account.drift[each.key].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principal://iam.googleapis.com/${local.pool_name}/subject/${var.sub_claim_prefix}:environment:drift-${each.key}"
+
+  # A principal:// member is rejected until its pool exists.
+  depends_on = [google_iam_workload_identity_pool.github]
 }
 
 resource "google_project_iam_member" "drift" {

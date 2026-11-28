@@ -25,6 +25,16 @@ output "GCP_DEPLOYER_SA" {
   value       = module.github_wif.deployer_emails
 }
 
+output "DRIFT_WIF_PROVIDER" {
+  description = "Map of environment (dev, qa) to its drift Workload Identity provider full name, for the drift-<env> environment variable."
+  value       = module.github_wif.drift_workload_identity_providers
+}
+
+output "DRIFT_SA" {
+  description = "Map of environment (dev, qa) to its read-only drift service account e-mail, for the drift-<env> environment variable."
+  value       = module.github_wif.drift_service_accounts
+}
+
 # CI identity of this repository (docs/ci-identity-runbook.md): the secrets GCP_CI_WIF_PROVIDER and GCP_CI_SA.
 output "CI_WIF_PROVIDER" {
   description = "Workload Identity provider full name for the plan and drift workflows."

@@ -59,6 +59,22 @@ override_resource {
 }
 
 override_resource {
+  target = module.github_wif["site"].google_service_account.drift["production"]
+  values = {
+    name  = "projects/your-production-project-id/serviceAccounts/gh-drift-site@your-production-project-id.iam.gserviceaccount.com"
+    email = "gh-drift-site@your-production-project-id.iam.gserviceaccount.com"
+  }
+}
+
+override_resource {
+  target = module.github_wif["web"].google_service_account.drift["production"]
+  values = {
+    name  = "projects/your-production-project-id/serviceAccounts/gh-drift-web@your-production-project-id.iam.gserviceaccount.com"
+    email = "gh-drift-web@your-production-project-id.iam.gserviceaccount.com"
+  }
+}
+
+override_resource {
   target = module.gke.google_container_cluster.this
   values = {
     control_plane_endpoints_config = {
@@ -112,8 +128,8 @@ run "two_services_two_pools_one_role" {
     error_message = "each service has its own pool"
   }
   assert {
-    condition     = alltrue([for m in values(module.github_wif) : m.preview_workload_identity_provider == null && length(m.drift_workload_identity_providers) == 0 && keys(m.deployer_emails) == ["production"]])
-    error_message = "previews and drift are off; production is the only environment"
+    condition     = alltrue([for m in values(module.github_wif) : m.preview_workload_identity_provider == null && keys(m.drift_workload_identity_providers) == ["production"] && keys(m.deployer_emails) == ["production"]])
+    error_message = "previews are off, drift is production only; production is the only environment"
   }
   assert {
     condition     = module.connect_role.role_name == "projects/your-production-project-id/roles/gkeDnsConnect"
@@ -149,6 +165,46 @@ run "identity_wiring_per_service" {
   assert {
     condition     = output.GCP_WIF_PROVIDER["web"] == "projects/123456789012/locations/global/workloadIdentityPools/gh-web/providers/github-oidc"
     error_message = "provider belongs to the web pool"
+  }
+}
+
+# L4.8: one drift-production reader per service, in the service's own pool, read-only.
+run "drift_identity_per_service" {
+  command = plan
+
+  assert {
+    condition = output.DRIFT_WIF_PROVIDER == {
+      site = "projects/123456789012/locations/global/workloadIdentityPools/gh-site/providers/github-oidc-drift-production"
+      web  = "projects/123456789012/locations/global/workloadIdentityPools/gh-web/providers/github-oidc-drift-production"
+    }
+    error_message = "exactly one drift provider per service, in its own pool"
+  }
+  assert {
+    condition = output.DRIFT_SA == {
+      site = "gh-drift-site@your-production-project-id.iam.gserviceaccount.com"
+      web  = "gh-drift-web@your-production-project-id.iam.gserviceaccount.com"
+    }
+    error_message = "one drift reader per service"
+  }
+  assert {
+    condition     = module.github_wif["web"].drift_condition == { production = "assertion.repository_owner_id=='111111111' && assertion.repository_id=='222222222' && assertion.environment=='drift-production' && assertion.job_workflow_ref.matches('^example-owner/example-repo/\\\\.github/workflows/drift\\\\.yml@refs/heads/main$')" }
+    error_message = "web drift condition admits only its repository, drift-production and drift.yml on main"
+  }
+  assert {
+    condition     = module.github_wif["site"].drift_condition == { production = "assertion.repository_owner_id=='111111111' && assertion.repository_id=='444444444' && assertion.environment=='drift-production' && assertion.job_workflow_ref.matches('^example-owner/example\\\\.site/\\\\.github/workflows/drift\\\\.yml@refs/heads/main$')" }
+    error_message = "site drift condition"
+  }
+  assert {
+    condition     = module.github_wif["web"].drift_wif_members == { production = "principal://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/gh-web/subject/repo:example-owner@111111111/example-repo@222222222:environment:drift-production" }
+    error_message = "web drift member"
+  }
+  assert {
+    condition     = module.github_wif["site"].drift_wif_members == { production = "principal://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/gh-site/subject/repo:example-owner@111111111/example.site@444444444:environment:drift-production" }
+    error_message = "site drift member"
+  }
+  assert {
+    condition     = alltrue([for m in values(module.github_wif) : m.drift_cluster_roles == { production = "projects/your-production-project-id/roles/gkeDnsConnect" }])
+    error_message = "the drift reader holds only the custom connect role (get and connect)"
   }
 }
 
@@ -241,6 +297,16 @@ run "duplicate_service_name_rejected" {
     services = {
       a-svc = { service_name = "same-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o@1/a@2", deployer_account_id = "gh-deployer-a", secret_keys = [] }
       b-svc = { service_name = "same-name", github_repository = "o/b", github_owner_id = "1", github_repo_id = "3", sub_claim_prefix = "repo:o@1/b@3", deployer_account_id = "gh-deployer-b", secret_keys = [] }
+    }
+  }
+  expect_failures = [var.services]
+}
+
+run "deployer_id_with_the_drift_prefix_rejected" {
+  command = plan
+  variables {
+    services = {
+      a-svc = { service_name = "one-name", github_repository = "o/a", github_owner_id = "1", github_repo_id = "2", sub_claim_prefix = "repo:o@1/a@2", deployer_account_id = "gh-drift-a-svc", secret_keys = [] }
     }
   }
   expect_failures = [var.services]

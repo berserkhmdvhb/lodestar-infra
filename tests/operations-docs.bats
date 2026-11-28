@@ -64,13 +64,16 @@ oldblocks() {
     -e 's/echo "exit=\$?"/printf '"'"'exit=%s\\n'"'"' "$?"/g'
 }
 
-@test "every fenced block of the old file (with the 6 documented edits) is in the new set, verbatim, once" {
+@test "every fenced block of the old file (with the 6 documented edits) is still in the new set, verbatim, once" {
   oldblocks | LC_ALL=C sort > "$BATS_TEST_TMPDIR/old"
   blocks "${NEW[@]}" | LC_ALL=C sort > "$BATS_TEST_TMPDIR/new"
   [ "$(wc -l < "$BATS_TEST_TMPDIR/old")" -gt 100 ]
-  run diff "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new"
+  run env LC_ALL=C comm -23 "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new"
   echo "$output" | tr '\f' '~' | head -20
-  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run env LC_ALL=C comm -12 "$BATS_TEST_TMPDIR/old" <(uniq -d "$BATS_TEST_TMPDIR/new")
+  echo "$output" | tr '\f' '~' | head -20
+  [ -z "$output" ]
 }
 
 @test "every prose line of the old file is in the new set, except the listed intended edits" {

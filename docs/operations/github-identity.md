@@ -264,3 +264,110 @@ gh run rerun <run-id> --repo "${GH_REPO}"
 
 Expect: green after the propagation wait (6.6).
 
+
+### 6.8 Live-drift identities (apps)
+
+The template's weekly live-drift check (`drift.yml`, template GKE guide 12.6) runs each environment in a GitHub
+environment `drift-<env>` as a read-only drift reader. `envs/apps` creates that identity for `dev` and `qa`: a
+provider that admits only `drift.yml` on `main` in `drift-<env>`, a service account `gh-drift-<env>` bound to that
+subject, and the cluster-connect role the deployer holds (never a write role). Production's drift identity is
+per service in `envs/prod` (production runbook, step 9).
+
+🔍 First, look for drift identities made by hand (template guide 12.6, parts 1 and 2). Names only, nothing changes.
+If any exists, the apply below stops partway with `409 already exists`, even though the plan says `8 to add`:
+
+```bash
+source ~/gke-setup.env
+gcloud iam workload-identity-pools providers list --location=global --workload-identity-pool=github --project "${PROJECT_ID}" --show-deleted --filter='name~github-oidc-drift-' --format='value(name,state)'
+gcloud iam service-accounts list --project "${PROJECT_ID}" --filter='email~^gh-drift-' --format='value(email)'
+gcloud projects get-iam-policy "${PROJECT_ID}" --flatten=bindings --filter='bindings.members~gh-drift-' --format='value(bindings.role,bindings.members)'
+```
+
+Expect: nothing at all. Then go on to the plan. If something is listed, do not apply yet, and never delete it (a
+deleted provider ID stays reserved for about 30 days). Import each one found into the state, one command per
+resource, before the plan. A provider listed as `DELETED` is brought back first:
+
+✏️ Only for what the listing showed; `<env>` is `dev` or `qa`. `PROJECT_ID` and `PROJECT_NUMBER` are from the env file.
+
+```bash
+gcloud iam workload-identity-pools providers undelete "github-oidc-drift-<env>" --location=global --workload-identity-pool=github --project "${PROJECT_ID}"
+tofu -chdir=envs/apps import 'module.github_wif.google_iam_workload_identity_pool_provider.drift["<env>"]' "projects/${PROJECT_ID}/locations/global/workloadIdentityPools/github/providers/github-oidc-drift-<env>"
+tofu -chdir=envs/apps import 'module.github_wif.google_service_account.drift["<env>"]' "projects/${PROJECT_ID}/serviceAccounts/gh-drift-<env>@${PROJECT_ID}.iam.gserviceaccount.com"
+tofu -chdir=envs/apps import 'module.github_wif.google_service_account_iam_member.drift["<env>"]' "projects/${PROJECT_ID}/serviceAccounts/gh-drift-<env>@${PROJECT_ID}.iam.gserviceaccount.com roles/iam.workloadIdentityUser principal://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/subject/${SUB_PREFIX}:environment:drift-<env>"
+tofu -chdir=envs/apps import 'module.github_wif.google_project_iam_member.drift["<env>"]' "${PROJECT_ID} roles/container.clusterViewer serviceAccount:gh-drift-<env>@${PROJECT_ID}.iam.gserviceaccount.com"
+```
+
+Expect: `Import successful!` for each command you run (the first line only for a deleted provider). These are
+`tofu import` commands, not import blocks in `imports.tf`: a block would fail the plan whenever the resource does
+not exist. Run only the lines for resources the listing showed. The plan below then counts fewer adds (8 minus what
+you imported). A hand-made provider may show one in-place update of its attribute condition (a hand-made condition
+leaves the dots of the repository name unescaped): that is expected, and applying it is fine. Any replace or
+destroy is a stop.
+
+🔍 The plan. It must only add (an in-place condition update on an imported provider aside), and name these 8
+resources (the module `github_wif`, for `dev` and `qa`; fewer if you imported some):
+
+```bash
+tofu -chdir=envs/apps plan -out=drift.tfplan
+tofu -chdir=envs/apps show -no-color drift.tfplan | grep -E '# .* will be|^Plan:'
+```
+
+Expect: `Plan: 8 to add, 0 to change, 0 to destroy.` and 8 lines `will be created`: for each of `dev` and `qa`,
+`module.github_wif.google_iam_workload_identity_pool_provider.drift["<env>"]`,
+`module.github_wif.google_service_account.drift["<env>"]`,
+`module.github_wif.google_service_account_iam_member.drift["<env>"]` and
+`module.github_wif.google_project_iam_member.drift["<env>"]`. Any change or destroy: stop, do not apply.
+
+✏️ Apply the reviewed plan, then check the next plan.
+
+```bash
+tofu -chdir=envs/apps apply drift.tfplan
+rm -f envs/apps/drift.tfplan
+tofu -chdir=envs/apps plan -detailed-exitcode
+```
+
+Expect: `Apply complete! Resources: 8 added, 0 changed, 0 destroyed.`, then `No changes.` (exit code 0).
+
+✏️ Create each `drift-<env>` GitHub environment (no required reviewers, so the weekly run never waits; deployments
+limited to `main`, the one ref the providers admit), then set its variables from the outputs. Only these two creation
+commands are taken from the template's guide 12.6 (part 4); its other part-4 commands are not run here, and in
+particular `DRIFT_ENABLED` is set later (below). The in-cluster read-only RBAC is the template's namespace bootstrap
+(part 3, `drift.name` in the bootstrap values, set to `gh-drift-<env>@<PROJECT_ID>.iam.gserviceaccount.com`). The
+repository is the template copy named by `GH_REPO` in the env file, saved before the `unset`. The cluster variables
+(`GCP_PROJECT_ID`, `GKE_CLUSTER`, `GKE_LOCATION`) come from the repository, because `apps` is one project and one
+cluster, so only three variables are set per environment. An empty output stops the loop.
+
+```bash
+source ~/gke-setup.env
+APP_REPO="${GH_REPO}"
+unset GH_REPO
+OUT_WIF="$(tofu -chdir=envs/apps output -json DRIFT_WIF_PROVIDER)"
+OUT_SA="$(tofu -chdir=envs/apps output -json DRIFT_SA)"
+if [ -z "${APP_REPO}" ] || [ -z "${OUT_WIF}" ] || [ -z "${OUT_SA}" ]; then
+  printf 'a value is empty: stop\n'
+else
+  for env in dev qa; do
+    WIF="$(printf '%s' "${OUT_WIF}" | jq -r --arg e "${env}" '.[$e] // empty')"
+    SA="$(printf '%s' "${OUT_SA}" | jq -r --arg e "${env}" '.[$e] // empty')"
+    EDGE="$(gh variable get EDGE_DOMAIN --env "${env}" -R "${APP_REPO}")"
+    if [ -z "${WIF}" ] || [ -z "${SA}" ] || [ -z "${EDGE}" ]; then
+      printf 'nothing for %s: skipped\n' "${env}"
+      continue
+    fi
+    gh api -X PUT "repos/${APP_REPO}/environments/drift-${env}" -F 'deployment_branch_policy[protected_branches]=false' -F 'deployment_branch_policy[custom_branch_policies]=true' >/dev/null
+    gh api -X POST "repos/${APP_REPO}/environments/drift-${env}/deployment-branch-policies" -f name=main -f type=branch >/dev/null
+    gh variable set DRIFT_WIF_PROVIDER --env "drift-${env}" --body "${WIF}" -R "${APP_REPO}"
+    gh variable set DRIFT_SA --env "drift-${env}" --body "${SA}" -R "${APP_REPO}"
+    gh variable set EDGE_DOMAIN --env "drift-${env}" --body "${EDGE}" -R "${APP_REPO}"
+  done
+fi
+```
+
+Expect: three `Created variable ...` (or `Updated variable ...`) lines per environment. A rerun prints a `422` for the branch rule that already exists: harmless. `a value is empty: stop` means
+the apply did not finish; `nothing for <env>: skipped` means that environment has no output, or its own
+`EDGE_DOMAIN` is not set yet (set it first, then rerun). Nothing is set in either case. `EDGE_DOMAIN` is copied
+from the deploy environment of the same name, so a drift render sees the host names the deploy rendered.
+
+Turn the check on only after the first deploy of each environment, as the template's guide says: set the repository
+variable `DRIFT_ENABLED` to `true` then (template guide 12.6, part 4). Until it is set, the weekly run skips each
+environment and stays green. Production is not part of this step: its readers come from `envs/prod`.

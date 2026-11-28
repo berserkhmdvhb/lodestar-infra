@@ -85,8 +85,10 @@ slug() { tr 'A-Z' 'a-z' | sed -E 's/[`]//g; s/[^a-z0-9 _-]//g; s/ /-/g'; }
 @test "the add-count arithmetic matches the L4.3 inventory of 51 for 2 services and 3 keys" {
   [ "$((9 + 4 + 2 + 2 + 3 + 1 + 12 + 2 + 1))" -eq 36 ]
   [ "$((36 + 6 * 2 + 3))" -eq 51 ]
-  grep -qF 'N = 36 + 6 * S + K' "$DOC"
-  grep -qF 'K = 4, so N = 36 + 18 + 4 = 58' "$DOC"
+  [ "$((36 + 10 * 2 + 3))" -eq 59 ]
+  [ "$((36 + 10 * 3 + 4))" -eq 70 ]
+  grep -qF 'N = 36 + 10 * S + K' "$DOC"
+  grep -qF 'K = 4, so N = 36 + 30 + 4 = 70' "$DOC"
 }
 
 @test "the add-count awk groups a sample plan by module" {

@@ -53,6 +53,22 @@ override_resource {
 }
 
 override_resource {
+  target = module.github_wif.google_service_account.drift["dev"]
+  values = {
+    name  = "projects/your-project-id/serviceAccounts/gh-drift-dev@your-project-id.iam.gserviceaccount.com"
+    email = "gh-drift-dev@your-project-id.iam.gserviceaccount.com"
+  }
+}
+
+override_resource {
+  target = module.github_wif.google_service_account.drift["qa"]
+  values = {
+    name  = "projects/your-project-id/serviceAccounts/gh-drift-qa@your-project-id.iam.gserviceaccount.com"
+    email = "gh-drift-qa@your-project-id.iam.gserviceaccount.com"
+  }
+}
+
+override_resource {
   target = module.gke.google_container_cluster.this
   values = {
     control_plane_endpoints_config = {
@@ -104,7 +120,39 @@ run "dns_endpoint_is_exposed" {
   }
 }
 
-run "registry_off_budget_on_no_previews_no_drift" {
+# L4.8: dev and qa get a read-only drift reader; production moves to envs/prod. Nothing else changes.
+run "drift_readers_for_dev_and_qa_only" {
+  command = plan
+
+  assert {
+    condition = output.DRIFT_WIF_PROVIDER == {
+      dev = "projects/123456789012/locations/global/workloadIdentityPools/github/providers/github-oidc-drift-dev"
+      qa  = "projects/123456789012/locations/global/workloadIdentityPools/github/providers/github-oidc-drift-qa"
+    }
+    error_message = "DRIFT_WIF_PROVIDER: dev and qa only"
+  }
+  assert {
+    condition = output.DRIFT_SA == {
+      dev = "gh-drift-dev@your-project-id.iam.gserviceaccount.com"
+      qa  = "gh-drift-qa@your-project-id.iam.gserviceaccount.com"
+    }
+    error_message = "DRIFT_SA: dev and qa only"
+  }
+  assert {
+    condition     = module.github_wif.drift_cluster_roles == { dev = "roles/container.clusterViewer", qa = "roles/container.clusterViewer" } && module.github_wif.drift_cluster_roles == { for e in ["dev", "qa"] : e => module.github_wif.deployer_cluster_roles[e] }
+    error_message = "drift readers hold the deployer's connect role and nothing else"
+  }
+  assert {
+    condition     = module.github_wif.drift_wif_members["qa"] == "principal://iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/github/subject/repo:example-owner/example-repo:environment:drift-qa"
+    error_message = "the exact drift-qa subject"
+  }
+  assert {
+    condition     = module.github_wif.drift_condition["dev"] == "assertion.repository_owner_id=='111111111' && assertion.repository_id=='222222222' && assertion.environment=='drift-dev' && assertion.job_workflow_ref.matches('^example-owner/example-repo/\\\\.github/workflows/drift\\\\.yml@refs/heads/main$')"
+    error_message = "the exact dev drift condition"
+  }
+}
+
+run "registry_off_budget_on_no_previews_drift_dev_qa" {
   command = plan
 
   assert {
@@ -116,8 +164,8 @@ run "registry_off_budget_on_no_previews_no_drift" {
     error_message = "budget must be on"
   }
   assert {
-    condition     = module.github_wif.preview_workload_identity_provider == null && length(module.github_wif.drift_workload_identity_providers) == 0
-    error_message = "previews and drift must be off"
+    condition     = module.github_wif.preview_workload_identity_provider == null && keys(module.github_wif.drift_workload_identity_providers) == ["dev", "qa"]
+    error_message = "previews off; drift on for dev and qa only"
   }
 }
 

@@ -450,6 +450,23 @@ Also cover drift detection, which runs as `tofu plan` on a schedule once credent
 ### Task L4.7: The `apps` budget
 - [ ] Raise the `apps` budget from €20 to its real non-production cost, read from its first full months of bills. Owner acceptance: the plan shows only the budget amount changing.
 
+### Task L4.8: Live-drift identities for the template's drift check (added 2026-11-27, owner "yes")
+**Files:** `modules/gcp-github-wif` (`drift_environments`, `drift_account_ids`, the relaxed production guard, new outputs), `envs/apps`, `envs/prod`, tests, `docs/operations/github-identity.md` and `docs/production-runbook.md`.
+- [x] **The module:** drift on a subset of environments, with drift account IDs as an input. Defaults keep both roots byte-identical. A production call may enable drift on exactly `[production]`; previews are still refused.
+- [x] **`envs/apps`:** drift on dev and qa only. The expected owner plan is 8 to add (a provider, SA, WIU member and connect-role member per environment), 0 to change, 0 to destroy.
+- [x] **`envs/prod`:** one `drift-production` reader per service (`gh-drift-<key>`). A deployer ID may not start with `gh-drift-`. A first plan creates 36 + 10S + K resources.
+- [x] **Runbooks:**
+  - a read-only pre-check for hand-made drift identities, with a `tofu import` path (never delete: a deleted provider ID stays reserved);
+  - the `drift-<env>` environment variables;
+  - production's in-cluster drift binding and its `can-i` check;
+  - `DRIFT_ENABLED` only after the first deploy.
+- [ ] **Owner acceptance (`apps`):** the pre-check finds nothing (or the imports are done); the plan shows the 8 adds; apply; then "No changes"; the `drift-dev` and `drift-qa` variables are set.
+
+**Executed (2026-11-27):**
+- Built in an isolated worktree.
+- The opus review found 3 Important runbook gaps (the hand-made pre-check, production's RBAC name, the part-4 pointer); one fix round addressed all 9 items, and the re-review is clean.
+- The docs-preservation test now checks old blocks are a subset of new.
+
 ## Carried from the setup-guide fixes (2026-11-25)
 
 The guides were corrected before the owner's by-hand setup. Their settings are this plan's source, so these land in the modules:
