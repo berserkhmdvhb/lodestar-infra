@@ -33,14 +33,15 @@ after reviewing the plan, runs the state-only import by hand: see [`docs/import-
 
 | Command | What it does |
 | --- | --- |
+| `make` / `make help` | List these commands; this is the default, it runs no gate |
 | `make tools` | Install the pinned toolchain into `./.tools` (each download checked against its sha256) |
 | `make tools-dry-run` | Show what `make tools` would do, install nothing |
-| `make fmt` | `tofu fmt -check -recursive` |
+| `make fmt` | `tofu fmt -check` |
 | `make validate` | `tofu init -backend=false` and `tofu validate` per root |
 | `make lint` | tflint per root, then checkov |
 | `make test` | `tofu test` per root with a `tests/` directory, then `bats tests/` |
 | `make actions` | actionlint and zizmor (offline) over `.github/` |
-| `make check` | All of the above, plus shellcheck and gitleaks over the git history |
+| `make check` | Run all the gates: all of the above, plus shellcheck and gitleaks over the git history |
 
 With no OpenTofu roots yet, each target prints `no OpenTofu roots yet` and succeeds.
 

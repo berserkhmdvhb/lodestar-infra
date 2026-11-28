@@ -1,7 +1,7 @@
 # Quality gates. Nothing here applies anything: init is always -backend=false, tests use mocks.
 # Tools live in ./.tools (make tools); every tool home stays under ./.tools.
 SHELL := /bin/bash
-.DEFAULT_GOAL := check
+.DEFAULT_GOAL := help
 
 export PATH := $(CURDIR)/.tools/bin:$(PATH)
 export TFLINT_PLUGIN_DIR := $(CURDIR)/.tools/tflint-plugins
@@ -13,7 +13,24 @@ ROOTS := $(sort $(patsubst %/,%,$(dir $(shell find bootstrap modules envs -name 
 TF_DIRS := $(wildcard bootstrap modules envs)
 NO_ROOTS = echo "no OpenTofu roots yet"
 
-.PHONY: tools tools-dry-run fmt validate tflint checkov lint test shellcheck secrets actions check
+.PHONY: help tools tools-dry-run fmt validate tflint checkov lint test shellcheck secrets actions check
+
+help:
+	@printf 'Available Makefile commands:\n'
+	@printf '  %-14s %s\n' \
+	  help "List these commands (the default)" \
+	  tools "Install the pinned toolchain into ./.tools" \
+	  tools-dry-run "Show what make tools would do, install nothing" \
+	  fmt "tofu fmt -check" \
+	  validate "tofu init -backend=false and tofu validate per root" \
+	  tflint "tflint per root" \
+	  checkov "checkov over the roots; tests excluded, a parse failure fails" \
+	  lint "tflint, then checkov" \
+	  test "tofu test per root with a tests/ directory, then bats tests/" \
+	  shellcheck "shellcheck over scripts/*.sh" \
+	  secrets "gitleaks over the git history" \
+	  actions "actionlint and zizmor (offline) over .github/" \
+	  check "Run all the gates: fmt, validate, lint, test, shellcheck, secrets, actions"
 
 tools:
 	@scripts/tools.sh install
